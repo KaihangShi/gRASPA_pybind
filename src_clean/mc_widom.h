@@ -258,8 +258,13 @@ __global__ void get_random_trial_orientation(Boxsize Box, Atoms* d_a, Atoms Mol,
 }
 
 
-static inline double Widom_Move_FirstBead_PARTIAL(Components& SystemComponents, Simulations& Sims, ForceField& FF, RandomNumber& Random, WidomStruct& Widom, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType, double &StoredR, size_t *REAL_Selected_Trial, bool *SuccessConstruction, MoveEnergy *energy, double2 proposed_scale)
+static inline double Widom_Move_FirstBead_PARTIAL(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType, double &StoredR, size_t *REAL_Selected_Trial, bool *SuccessConstruction, MoveEnergy *energy, double2 proposed_scale)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Simulations& Sims            = Vars.Sims[systemId];
+  ForceField& FF               = Vars.device_FF;
+  RandomNumber& Random         = Vars.Random;
+  WidomStruct& Widom           = Vars.Widom[systemId];
 
   bool Goodconstruction = false; size_t SelectedTrial = 0; double Rosenbluth = 0.0;
   size_t Atomsize = 0;
@@ -392,8 +397,14 @@ static inline double Widom_Move_FirstBead_PARTIAL(Components& SystemComponents, 
   return averagedRosen;
 }
 
-static inline double Widom_Move_Chain_PARTIAL(Components& SystemComponents, Simulations& Sims, ForceField& FF, RandomNumber& Random, WidomStruct& Widom, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType, size_t *REAL_Selected_Trial, bool *SuccessConstruction, MoveEnergy *energy, size_t FirstBeadTrial, double2 proposed_scale)
+static inline double Widom_Move_Chain_PARTIAL(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType, size_t *REAL_Selected_Trial, bool *SuccessConstruction, MoveEnergy *energy, size_t FirstBeadTrial, double2 proposed_scale)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Simulations& Sims            = Vars.Sims[systemId];
+  ForceField& FF               = Vars.device_FF;
+  RandomNumber& Random         = Vars.Random;
+  WidomStruct& Widom           = Vars.Widom[systemId];
+
   MoveEnergy TEMP;
   *energy = TEMP;
   //printf("DOING RANDOM ORIENTAITONS\n");

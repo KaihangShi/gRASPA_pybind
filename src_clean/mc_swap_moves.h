@@ -30,8 +30,13 @@ __global__ void Update_Reinsertion_data(Atoms* d_a, double3* temp, size_t Select
   d_a[SelectedComponent].pos[realLocation] = temp[i];
 }
 
-static inline MoveEnergy Reinsertion(Components& SystemComponents, Simulations& Sims, ForceField& FF, RandomNumber& Random, WidomStruct& Widom, size_t SelectedMolInComponent, size_t SelectedComponent)
+static inline MoveEnergy Reinsertion(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Simulations& Sims            = Vars.Sims[systemId];
+  ForceField& FF               = Vars.device_FF;
+  //RandomNumber& Random         = Vars.Random;
+  //WidomStruct& Widom           = Vars.Widom[systemId];
   //Get Number of Molecules for this component (For updating TMMC)//
   double NMol = SystemComponents.NumberOfMolecule_for_Component[SelectedComponent];
   if(SystemComponents.hasfractionalMolecule[SelectedComponent]) NMol--;
@@ -46,7 +51,7 @@ static inline MoveEnergy Reinsertion(Components& SystemComponents, Simulations& 
   ///////////////
   int CBMCType = REINSERTION_INSERTION; //Reinsertion-Insertion//
   double2 newScale  = SystemComponents.Lambda[SelectedComponent].SET_SCALE(1.0); //Zhao's note: not used in reinsertion, just set to 1.0//
-  double Rosenbluth=Widom_Move_FirstBead_PARTIAL(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, SelectedComponent, CBMCType, StoredR, &SelectedTrial, &SuccessConstruction, &energy, newScale); //Not reinsertion, not Retrace//
+  double Rosenbluth=Widom_Move_FirstBead_PARTIAL(Vars, systemId, SelectedMolInComponent, SelectedComponent, CBMCType, StoredR, &SelectedTrial, &SuccessConstruction, &energy, newScale); //Not reinsertion, not Retrace//
 
   if(Rosenbluth <= 1e-150) SuccessConstruction = false; //Zhao's note: added this protection bc of weird error when testing GibbsParticleXfer
 
@@ -61,7 +66,7 @@ static inline MoveEnergy Reinsertion(Components& SystemComponents, Simulations& 
   {
     size_t SelectedFirstBeadTrial = SelectedTrial; 
     MoveEnergy temp_energy = energy;
-    Rosenbluth*=Widom_Move_Chain_PARTIAL(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, SelectedComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &energy, SelectedFirstBeadTrial, newScale); //True for doing insertion for reinsertion, different in MoleculeID//
+    Rosenbluth*=Widom_Move_Chain_PARTIAL(Vars, systemId, SelectedMolInComponent, SelectedComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &energy, SelectedFirstBeadTrial, newScale); //True for doing insertion for reinsertion, different in MoleculeID//
     if(Rosenbluth <= 1e-150) SuccessConstruction = false; //Zhao's note: added this protection bc of weird error when testing GibbsParticleXfer
     if(!SuccessConstruction)
     { 
@@ -78,13 +83,13 @@ static inline MoveEnergy Reinsertion(Components& SystemComponents, Simulations& 
   // RETRACE //
   /////////////
   CBMCType = REINSERTION_RETRACE; //Reinsertion-Retrace//
-  double Old_Rosen=Widom_Move_FirstBead_PARTIAL(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, SelectedComponent, CBMCType, StoredR, &SelectedTrial, &SuccessConstruction, &old_energy, newScale);
+  double Old_Rosen=Widom_Move_FirstBead_PARTIAL(Vars, systemId, SelectedMolInComponent, SelectedComponent, CBMCType, StoredR, &SelectedTrial, &SuccessConstruction, &old_energy, newScale);
 
   if(SystemComponents.Moleculesize[SelectedComponent] > 1)
   {
     size_t SelectedFirstBeadTrial = SelectedTrial;
     MoveEnergy temp_energy = old_energy;
-    Old_Rosen*=Widom_Move_Chain_PARTIAL(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, SelectedComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &old_energy, SelectedFirstBeadTrial, newScale);
+    Old_Rosen*=Widom_Move_Chain_PARTIAL(Vars, systemId, SelectedMolInComponent, SelectedComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &old_energy, SelectedFirstBeadTrial, newScale);
     old_energy += temp_energy;
   }
  
@@ -146,29 +151,39 @@ static inline MoveEnergy Reinsertion(Components& SystemComponents, Simulations& 
 }
 
 //Zhao's note: added feature for creating fractional molecules//
-static inline double WidomMove(Components& SystemComponents, Simulations& Sims, ForceField& FF, RandomNumber& Random, WidomStruct& Widom, size_t SelectedMolInComponent, size_t SelectedComponent, double2 newScale)
+static inline double WidomMove(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, double2 newScale)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  //Simulations& Sims            = Vars.Sims[systemId];
+  //ForceField& FF               = Vars.device_FF;
+  //RandomNumber& Random         = Vars.Random;
+  //WidomStruct& Widom           = Vars.Widom[systemId];
   bool SuccessConstruction = false;
   double Rosenbluth = 0.0;
   size_t SelectedTrial = 0;
   double preFactor = 0.0;
   
   //Zhao's note: For creating the fractional molecule, there is no previous step, so set the flag to false//
-  MoveEnergy energy = Insertion_Body(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, SelectedComponent, Rosenbluth, SuccessConstruction, SelectedTrial, preFactor, false, newScale);
+  MoveEnergy energy = Insertion_Body(Vars, systemId, SelectedMolInComponent, SelectedComponent, Rosenbluth, SuccessConstruction, SelectedTrial, preFactor, false, newScale);
   return Rosenbluth;
 }
 
 
 //Zhao's note: added feature for creating fractional molecules//
-static inline MoveEnergy CreateMolecule(Components& SystemComponents, Simulations& Sims, ForceField& FF, RandomNumber& Random, WidomStruct& Widom, size_t SelectedMolInComponent, size_t SelectedComponent, double2 newScale)
+static inline MoveEnergy CreateMolecule(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, double2 newScale)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Simulations& Sims            = Vars.Sims[systemId];
+  ForceField& FF               = Vars.device_FF;
+  //RandomNumber& Random         = Vars.Random;
+  //WidomStruct& Widom           = Vars.Widom[systemId];
   bool SuccessConstruction = false;
   double Rosenbluth = 0.0;
   size_t SelectedTrial = 0;
   double preFactor = 0.0;
   
   //Zhao's note: For creating the fractional molecule, there is no previous step, so set the flag to false//
-  MoveEnergy energy = Insertion_Body(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, SelectedComponent, Rosenbluth, SuccessConstruction, SelectedTrial, preFactor, false, newScale); 
+  MoveEnergy energy = Insertion_Body(Vars, systemId, SelectedMolInComponent, SelectedComponent, Rosenbluth, SuccessConstruction, SelectedTrial, preFactor, false, newScale); 
   if(!SuccessConstruction) 
   {
     energy.zero();
@@ -192,8 +207,14 @@ static inline MoveEnergy CreateMolecule(Components& SystemComponents, Simulation
   return energy;
 }
 //Zhao's note: This insertion only takes care of the full (not fractional) molecules//
-static inline MoveEnergy Insertion(Components& SystemComponents, Simulations& Sims, ForceField& FF, RandomNumber& Random, WidomStruct& Widom, size_t SelectedMolInComponent, size_t SelectedComponent)
+static inline MoveEnergy Insertion(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Simulations& Sims            = Vars.Sims[systemId];
+  ForceField& FF               = Vars.device_FF;
+  //RandomNumber& Random         = Vars.Random;
+  //WidomStruct& Widom           = Vars.Widom[systemId];
+  
   //Get Number of Molecules for this component (For updating TMMC)//
   //This is the OLD STATE//
   double NMol = SystemComponents.NumberOfMolecule_for_Component[SelectedComponent];
@@ -207,7 +228,7 @@ static inline MoveEnergy Insertion(Components& SystemComponents, Simulations& Si
   double preFactor = 0.0;
 
   double2 newScale = SystemComponents.Lambda[SelectedComponent].SET_SCALE(1.0); //Set scale for full molecule (lambda = 1.0)//
-  MoveEnergy energy = Insertion_Body(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, SelectedComponent, Rosenbluth, SuccessConstruction, SelectedTrial, preFactor, false, newScale); 
+  MoveEnergy energy = Insertion_Body(Vars, systemId, SelectedMolInComponent, SelectedComponent, Rosenbluth, SuccessConstruction, SelectedTrial, preFactor, false, newScale); 
   if(!SuccessConstruction) 
   {
     //If unsuccessful move (Overlap), Pacc = 0//
@@ -242,8 +263,14 @@ static inline MoveEnergy Insertion(Components& SystemComponents, Simulations& Si
   return energy;
 }
 
-static inline MoveEnergy Deletion(Components& SystemComponents, Simulations& Sims, ForceField& FF,  RandomNumber& Random, WidomStruct& Widom, size_t SelectedMolInComponent, size_t SelectedComponent)
+static inline MoveEnergy Deletion(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Simulations& Sims            = Vars.Sims[systemId];
+  ForceField& FF               = Vars.device_FF;
+  //RandomNumber& Random         = Vars.Random;
+  //WidomStruct& Widom           = Vars.Widom[systemId];
+
   //Get Number of Molecules for this component (For updating TMMC)//
   double NMol = SystemComponents.NumberOfMolecule_for_Component[SelectedComponent];
   if(SystemComponents.hasfractionalMolecule[SelectedComponent]) NMol--;
@@ -258,7 +285,7 @@ static inline MoveEnergy Deletion(Components& SystemComponents, Simulations& Sim
   size_t UpdateLocation = 0;
   double2 Scale = SystemComponents.Lambda[SelectedComponent].SET_SCALE(1.0); //Set scale for full molecule (lambda = 1.0), Zhao's note: This is not used in deletion, just set to 1//
   //Wrapper for the deletion move//
-  energy = Deletion_Body(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, SelectedComponent, UpdateLocation, Rosenbluth, SuccessConstruction, preFactor, Scale);
+  energy = Deletion_Body(Vars, systemId, SelectedMolInComponent, SelectedComponent, UpdateLocation, Rosenbluth, SuccessConstruction, preFactor, Scale);
   if(!SuccessConstruction)
   {
     //If unsuccessful move (Overlap), Pacc = 0//
@@ -293,8 +320,14 @@ static inline MoveEnergy Deletion(Components& SystemComponents, Simulations& Sim
   return energy;
 }
 
-static inline void GibbsParticleTransfer(std::vector<Components>& SystemComponents, Simulations*& Sims, ForceField& FF, RandomNumber& Random, std::vector<WidomStruct>& Widom, size_t SelectedComponent, Gibbs& GibbsStatistics)
+static inline void GibbsParticleTransfer(Variables& Vars, size_t SelectedComponent, Gibbs& GibbsStatistics)
 {
+  std::vector<Components>& SystemComponents = Vars.SystemComponents;
+  Simulations*& Sims                        = Vars.Sims;
+  ForceField& FF                            = Vars.device_FF;
+  //RandomNumber& Random                      = Vars.Random;
+  //std::vector<WidomStruct>& Widom           = Vars.Widom;
+
   size_t NBox = SystemComponents.size();
   size_t SelectedBox = 0;
   size_t OtherBox    = 1;
@@ -334,7 +367,7 @@ static inline void GibbsParticleTransfer(std::vector<Components>& SystemComponen
   double InsertionRosen         = 0.0;
   bool   InsertionSuccess       = false;
   //size_t InsertionSelectedMol   = 0; //It is safer to ALWAYS choose the first atom as the template for CBMC_INSERTION//
-  MoveEnergy InsertionEnergy = Insertion_Body(SystemComponents[SelectedBox], Sims[SelectedBox], FF, Random, Widom[SelectedBox], InsertionSelectedMol, SelectedComponent, InsertionRosen, InsertionSuccess, InsertionSelectedTrial, InsertionPrefactor, false, Scale);
+  MoveEnergy InsertionEnergy = Insertion_Body(Vars, SelectedBox, InsertionSelectedMol, SelectedComponent, InsertionRosen, InsertionSuccess, InsertionSelectedTrial, InsertionPrefactor, false, Scale);
 
   //printf("InsertionRosen: %.5f, InsertionSuccess: %s, RN offset: %zu\n", InsertionRosen, InsertionSuccess ? "true" : "false", Random.offset);
 
@@ -348,7 +381,7 @@ static inline void GibbsParticleTransfer(std::vector<Components>& SystemComponen
   double DeletionPrefactor      = 0.0;
   double DeletionRosen          = 0.0;
   bool   DeletionSuccess        = false;
-  MoveEnergy DeletionEnergy = Deletion_Body(SystemComponents[OtherBox], Sims[OtherBox], FF, Random, Widom[OtherBox], DeletionSelectedMol, SelectedComponent, DeletionUpdateLocation, DeletionRosen, DeletionSuccess, DeletionPrefactor, Scale);
+  MoveEnergy DeletionEnergy = Deletion_Body(Vars, OtherBox, DeletionSelectedMol, SelectedComponent, DeletionUpdateLocation, DeletionRosen, DeletionSuccess, DeletionPrefactor, Scale);
   if(!DeletionSuccess) return;
 
   bool Accept = false;
@@ -432,8 +465,13 @@ __global__ void Update_IdentitySwap_Insertion_data(Atoms* d_a, double3* temp, si
   d_a[NEWComponent].size += Molsize;
 }
 
-static inline MoveEnergy IdentitySwapMove(Components& SystemComponents, Simulations& Sims, WidomStruct& Widom, ForceField& FF, RandomNumber& Random)
+static inline MoveEnergy IdentitySwapMove(Variables& Vars, size_t systemId)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Simulations& Sims            = Vars.Sims[systemId];
+  ForceField& FF               = Vars.device_FF;
+  //RandomNumber& Random         = Vars.Random;
+  //WidomStruct& Widom           = Vars.Widom[systemId];
   //Identity Swap is sort-of Reinsertion//
   //The difference is that the component of the molecule are different//
   //Selected Molecule is the molecule that is being identity-swapped//
@@ -496,7 +534,7 @@ static inline MoveEnergy IdentitySwapMove(Components& SystemComponents, Simulati
   //WRITE THE component and molecule ID THAT IS GOING TO BE IGNORED DURING THE ENERGY CALC//
   Sims.ExcludeList[0] = {OLDComponent, OLDMolInComponent};
   double2 newScale  = SystemComponents.Lambda[NEWComponent].SET_SCALE(1.0); //Zhao's note: not used in reinsertion, just set to 1.0//
-  double Rosenbluth=Widom_Move_FirstBead_PARTIAL(SystemComponents, Sims, FF, Random, Widom, NEWMolInComponent, NEWComponent, CBMCType, StoredR, &SelectedTrial, &SuccessConstruction, &energy, newScale);
+  double Rosenbluth=Widom_Move_FirstBead_PARTIAL(Vars, systemId, NEWMolInComponent, NEWComponent, CBMCType, StoredR, &SelectedTrial, &SuccessConstruction, &energy, newScale);
 
   if(Rosenbluth <= 1e-150) SuccessConstruction = false; //Zhao's note: added this protection bc of weird error when testing GibbsParticleXfer
 
@@ -510,7 +548,7 @@ static inline MoveEnergy IdentitySwapMove(Components& SystemComponents, Simulati
   {
     size_t SelectedFirstBeadTrial = SelectedTrial;
     MoveEnergy temp_energy = energy;
-    Rosenbluth*=Widom_Move_Chain_PARTIAL(SystemComponents, Sims, FF, Random, Widom, NEWMolInComponent, NEWComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &energy, SelectedFirstBeadTrial, newScale); //True for doing insertion for reinsertion, different in MoleculeID//
+    Rosenbluth*=Widom_Move_Chain_PARTIAL(Vars, systemId, NEWMolInComponent, NEWComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &energy, SelectedFirstBeadTrial, newScale); //True for doing insertion for reinsertion, different in MoleculeID//
     if(Rosenbluth <= 1e-150) SuccessConstruction = false; //Zhao's note: added this protection bc of weird error when testing GibbsParticleXfer
     if(!SuccessConstruction)
     {
@@ -529,12 +567,12 @@ static inline MoveEnergy IdentitySwapMove(Components& SystemComponents, Simulati
   Sims.ExcludeList[0] = {-1, -1}; //Set to negative so that excludelist is ignored
 
   CBMCType = IDENTITY_SWAP_OLD; //Identity_Swap for the old configuration//
-  double Old_Rosen=Widom_Move_FirstBead_PARTIAL(SystemComponents, Sims, FF, Random, Widom, OLDMolInComponent, OLDComponent, CBMCType, StoredR, &SelectedTrial, &SuccessConstruction, &old_energy, newScale);
+  double Old_Rosen=Widom_Move_FirstBead_PARTIAL(Vars, systemId, OLDMolInComponent, OLDComponent, CBMCType, StoredR, &SelectedTrial, &SuccessConstruction, &old_energy, newScale);
   if(SystemComponents.Moleculesize[OLDComponent] > 1)
   {
     size_t SelectedFirstBeadTrial = SelectedTrial;
     MoveEnergy temp_energy = old_energy;
-    Old_Rosen*=Widom_Move_Chain_PARTIAL(SystemComponents, Sims, FF, Random, Widom, OLDMolInComponent, OLDComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &old_energy, SelectedFirstBeadTrial, newScale);
+    Old_Rosen*=Widom_Move_Chain_PARTIAL(Vars, systemId, OLDMolInComponent, OLDComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &old_energy, SelectedFirstBeadTrial, newScale);
     old_energy += temp_energy;
   }
 

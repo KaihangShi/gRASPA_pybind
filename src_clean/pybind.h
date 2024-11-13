@@ -38,6 +38,7 @@ double get_val_ptr(double* ptr, size_t location)
 //POINTER WRAPPERS//
 ////////////////////
 
+
 template <class T> class ptr_wrapper
 {
     public:
@@ -53,6 +54,16 @@ template <class T> class ptr_wrapper
         T* ptr;
 };
 
+template <typename T>
+py::array_t<T> ptr_to_pyarray(T* ptr, int size)
+{   
+  return py::array_t<T>(
+        {size}, // shTpe
+        {sizeof(T)}, // strides
+        ptr // data pointer
+    );
+}
+
 //void change_val_ptr(T* ptr, size_t location, T newval)
 template <typename T>
 void change_val_ptr(ptr_wrapper<T>& ptr, size_t location, T newval)
@@ -65,6 +76,79 @@ ptr_wrapper<double> get_ptr_double(Variables& Vars, std::string INPUT)
   if(INPUT == "FF.epsilon")    {return Vars.FF.epsilon;}
   else if(INPUT == "FF.sigma") {return Vars.FF.sigma;}
   else if(INPUT == "FF.shift") {return Vars.FF.shift;}
+}
+
+template <typename T>
+py::array_t<T> get_arr(Variables& Vars, std::string INPUT)
+{
+  T* P;
+  if(INPUT == "FF.epsilon")    {P = Vars.FF.epsilon;}
+  else if(INPUT == "FF.sigma") {P = Vars.FF.sigma;}
+  else if(INPUT == "FF.shift") {P = Vars.FF.shift;}
+  //else if(INPUT == "FF.FFType") {P = Vars.FF.FFType;}
+  else if(INPUT == "Vars.SystemComponents[0].HostSystem[0].charge") {P = Vars.SystemComponents[0].HostSystem[0].charge; }
+  py::array_t<T> Array = ptr_to_pyarray(P, Vars.FF.size);
+  return Array;
+}
+
+void CopyAtomDataFromGPU(Variables& Vars, size_t systemId, size_t component)
+{
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Atoms  device_System[SystemComponents.NComponents.x];
+  Atoms& Host_System = SystemComponents.HostSystem[component];
+  cudaMemcpy(device_System, Vars.Sims[systemId].d_a, SystemComponents.NComponents.x * sizeof(Atoms), cudaMemcpyDeviceToHost);
+  // if the host allocate_size is different from the device, allocate more space on the host
+  size_t current_allocated_size = device_System[component].Allocate_size;
+  if(current_allocated_size != Host_System.Allocate_size) //Need to update host
+  {
+    Host_System.pos       = (double3*) malloc(device_System[component].Allocate_size*sizeof(double3));
+    Host_System.scale     = (double*)  malloc(device_System[component].Allocate_size*sizeof(double));
+    Host_System.charge    = (double*)  malloc(device_System[component].Allocate_size*sizeof(double));
+    Host_System.scaleCoul = (double*)  malloc(device_System[component].Allocate_size*sizeof(double));
+    Host_System.Type      = (size_t*)  malloc(device_System[component].Allocate_size*sizeof(size_t));
+    Host_System.MolID     = (size_t*)  malloc(device_System[component].Allocate_size*sizeof(size_t));
+    Host_System.Allocate_size = device_System[component].Allocate_size;
+  }
+  //Host_System[component].size      = device_System[component].size; //Zhao's note: no matter what, the size (not allocated size) needs to be updated
+
+  cudaMemcpy(Host_System.pos, device_System[component].pos, \
+             sizeof(double3)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Host_System.scale, device_System[component].scale, \
+             sizeof(double)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Host_System.charge, device_System[component].charge, \
+             sizeof(double)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Host_System.scaleCoul, device_System[component].scaleCoul, \
+             sizeof(double)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Host_System.Type, device_System[component].Type, \
+             sizeof(size_t)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(Host_System.MolID, device_System[component].MolID, \
+             sizeof(size_t)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+  Host_System.size = device_System[component].size;
+}
+
+//try return a dictionary//
+//get all atoms from a system (simulation box) and a component//
+py::dict GetAllAtoms(Variables& Vars, size_t systemId, size_t component)
+{
+  py::dict AtomDict;
+  Atoms& HostSystem = Vars.SystemComponents[systemId].HostSystem[component];
+  size_t size = HostSystem.size;
+  AtomDict["pos"] = ptr_to_pyarray(HostSystem.pos, size);
+  AtomDict["charge"] = ptr_to_pyarray(HostSystem.charge, size);
+  AtomDict["Type"]   = ptr_to_pyarray(HostSystem.Type, size);
+  AtomDict["MolID"]  = ptr_to_pyarray(HostSystem.MolID, size);
+  return AtomDict;
+}
+
+//get the pseudo_atom definitions, written to a dict//
+py::dict GetPseudoAtomDefinitions(Variables& Vars)
+{
+  py::dict Dict;
+  Dict["Name"]        = py::cast(Vars.PseudoAtoms.Name);
+  Dict["Symbol"]      = py::cast(Vars.PseudoAtoms.Symbol);
+  Dict["SymbolIndex"] = py::cast(Vars.PseudoAtoms.SymbolIndex);
+  Dict["mass"]        = py::cast(Vars.PseudoAtoms.mass);
+  return Dict;
 }
 
 ptr_wrapper<int> get_ptr_int(Variables& Vars, std::string INPUT)
@@ -110,7 +194,6 @@ T square(T x)
 
 PYBIND11_MODULE(gRASPA, m)
 {
-
   py::class_<double2>(m, "double2")
     .def(py::init<>())
     .def_readwrite("x", &double2::x)
@@ -122,10 +205,14 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("y", &double3::y)
     .def_readwrite("z", &double3::z);
 
+  PYBIND11_NUMPY_DTYPE(double3, x, y, z);
+
   py::class_<Complex>(m, "Complex")
     .def(py::init<>())
     .def_readwrite("real", &Complex::real)
     .def_readwrite("imag", &Complex::imag);
+
+  m.def("ptr_to_pyarray", &ptr_to_pyarray<double>, "ptr", "size");
 
   m.def("get_ptr_int",    &get_ptr_int,    "Vars", "INPUT");
   m.def("get_ptr_double", &get_ptr_double, "Vars", "INPUT");
@@ -206,7 +293,7 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("Nblocks", &Simulations::Nblocks)
     .def_readwrite("Box", &Simulations::Box);
 
-  py::class_<ptr_wrapper<double>>(m,"p");
+  py::class_<ptr_wrapper<double>>(m,"double_ptr_wrapper");
   py::class_<ptr_wrapper<Simulations>>(m,"pSim");
   //m.def("get_ptr", &get_ptr<Simulations>, "Vars", "INPUT");
 
@@ -236,7 +323,6 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("OverlapCriteria", &Input_Container::OverlapCriteria)
     .def_readwrite("noCharges", &Input_Container::noCharges);
     
-
   py::class_<Variables>(m, "Variables")
     .def(py::init<>())
     .def("set_TEST", &Variables::set_TEST)
@@ -250,6 +336,12 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("NumberOfEquilibrationCycles", &Variables::NumberOfEquilibrationCycles)
     .def_readwrite("NumberOfProductionCycles", &Variables::NumberOfProductionCycles)
     .def_readwrite("SimulationMode", &Variables::SimulationMode);
+
+  m.def("get_arr", &get_arr<double>, "Variable", "NAME");
+
+  m.def("CopyAtomDataFromGPU", &CopyAtomDataFromGPU, "Variable", "systemId", "component");
+  m.def("GetAllAtoms", &GetAllAtoms, "Variable", "systemId", "component");
+  m.def("GetPseudoAtomDefinitions", &GetPseudoAtomDefinitions, "Variable");
 
   //m.def("get_total_energy", &check_energy_wrapper, "get total energy", "Var", "SimulationIndex"_a=0);
   m.def("get_total_energy", &check_energy_wrapper, "get total energy", "Var", "SimulationIndex");

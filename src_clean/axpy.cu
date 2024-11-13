@@ -70,7 +70,7 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
   Components& SystemComponents = Vars.SystemComponents[box_index];
   Simulations& Sims = Vars.Sims[box_index];
   ForceField& FF = Vars.device_FF;
-  RandomNumber& Random = Vars.Random;
+  //RandomNumber& Random = Vars.Random;
   WidomStruct& Widom = Vars.Widom[box_index];
 
   for(size_t i = 0; i < Vars.SystemComponents.size(); i++)
@@ -148,7 +148,7 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
     //////////////////////////////////
     //printf(" Widom Insertion\n");
     double2 newScale = SystemComponents.Lambda[comp].SET_SCALE(1.0); //Set scale for full molecule (lambda = 1.0)//
-    double Rosenbluth = WidomMove(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, comp, newScale);
+    double Rosenbluth = WidomMove(Vars, box_index, SelectedMolInComponent, comp, newScale);
     SystemComponents.Moves[comp].RecordRosen(Rosenbluth, WIDOM);
   }
   else if(RANDOMNUMBER < SystemComponents.Moves[comp].ReinsertionProb)
@@ -159,7 +159,7 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
     //printf(" Reinsertion\n");
     if(SystemComponents.NumberOfMolecule_for_Component[comp] > 0)
     {
-      DeltaE = Reinsertion(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, comp);
+      DeltaE = Reinsertion(Vars, box_index, SelectedMolInComponent, comp);
     }
     else
     {
@@ -169,7 +169,7 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
   else if(RANDOMNUMBER < SystemComponents.Moves[comp].IdentitySwapProb)
   {
     //printf(" Identity Swap\n");
-    DeltaE = IdentitySwapMove(SystemComponents, Sims, Widom, FF, Random);
+    DeltaE = IdentitySwapMove(Vars, box_index);
   }
   else if(RANDOMNUMBER < SystemComponents.Moves[comp].CBCFProb && SystemComponents.hasfractionalMolecule[comp])
   {
@@ -178,7 +178,7 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
     ///////////////////////
     //printf(" CBCF\n");
     SelectedMolInComponent = SystemComponents.Lambda[comp].FractionalMoleculeID;
-    DeltaE = CBCFMove(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, comp);
+    DeltaE = CBCFMove(Vars, box_index, SelectedMolInComponent, comp);
   }
   else if(RANDOMNUMBER < SystemComponents.Moves[comp].SwapProb)
   {
@@ -190,7 +190,7 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
       //printf(" Swap Insertion\n");
       if(!SystemComponents.SingleSwap)
       {
-        DeltaE = Insertion(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, comp);
+        DeltaE = Insertion(Vars, box_index, SelectedMolInComponent, comp);
       }
       else
       {
@@ -211,11 +211,10 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
         {
           if(!SystemComponents.SingleSwap)
           {
-            DeltaE = Deletion(SystemComponents, Sims, FF, Random, Widom, SelectedMolInComponent, comp);
+            DeltaE = Deletion(Vars, box_index, SelectedMolInComponent, comp);
           }
           else
           {
-            //DeltaE = SingleSwapMove(SystemComponents, Sims, Widom, FF, Random, SelectedMolInComponent, comp, SINGLE_DELETION);
             DeltaE = SingleBodyMove(Vars, box_index, SelectedMolInComponent, comp, SINGLE_DELETION);
           }
         }
@@ -240,7 +239,7 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
     //if(Vars.GibbsStatistics.DoGibbs)
     //printf("Gibbs SWAP\n");
     if(Vars.SystemComponents.size() == 2)
-      GibbsParticleTransfer(Vars.SystemComponents, Vars.Sims, FF, Random, Vars.Widom, comp, Vars.GibbsStatistics);
+      GibbsParticleTransfer(Vars, comp, Vars.GibbsStatistics);
   }
   else if(RANDOMNUMBER < SystemComponents.Moves[comp].GibbsVolumeMoveProb)
   {
@@ -251,8 +250,13 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle, int Simulatio
   SystemComponents.deltaE += DeltaE;
 }
 
-double CreateMolecule_InOneBox(Components& SystemComponents, Simulations& Sims, ForceField FF, RandomNumber& Random, WidomStruct Widom, bool AlreadyHasFractionalMolecule)
+double CreateMolecule_InOneBox(Variables& Vars, size_t systemId, bool AlreadyHasFractionalMolecule)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  //Simulations& Sims = Vars.Sims[systemId];
+  //ForceField& FF = Vars.device_FF;
+  //RandomNumber& Random = Vars.Random;
+  //WidomStruct& Widom = Vars.Widom[systemId];
   double running_energy = 0.0;
   // Create Molecules in the Box Before the Simulation //
   for(size_t comp = SystemComponents.NComponents.y; comp < SystemComponents.NComponents.x; comp++)
@@ -279,7 +283,7 @@ double CreateMolecule_InOneBox(Components& SystemComponents, Simulations& Sims, 
         double newLambda = static_cast<double>(NewBin) * SystemComponents.Lambda[comp].delta;
         double2 newScale = SystemComponents.Lambda[comp].SET_SCALE(newLambda);
         MoveEnergy DeltaE;
-        DeltaE = CreateMolecule(SystemComponents, Sims, FF, Random, Widom, SelectedMol, comp, newScale);
+        DeltaE = CreateMolecule(Vars, systemId, SelectedMol, comp, newScale);
         running_energy += DeltaE.total();
         SystemComponents.CreateMoldeltaE += DeltaE;
         if(SystemComponents.NumberOfMolecule_for_Component[comp] == OldVal)
@@ -301,7 +305,7 @@ double CreateMolecule_InOneBox(Components& SystemComponents, Simulations& Sims, 
       size_t OldVal    = SystemComponents.NumberOfMolecule_for_Component[comp];
       double2 newScale = SystemComponents.Lambda[comp].SET_SCALE(1.0); //Set scale for full molecule (lambda = 1.0)//
       MoveEnergy DeltaE;
-      DeltaE = CreateMolecule(SystemComponents, Sims, FF, Random, Widom, SelectedMol, comp, newScale);
+      DeltaE = CreateMolecule(Vars, systemId, SelectedMol, comp, newScale);
       //printf("Creating %zu molecule\n", SelectedMol);
       //DeltaE.print();
       running_energy += DeltaE.total();

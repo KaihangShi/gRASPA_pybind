@@ -15,7 +15,7 @@ void Calculate_Exclusion_Energy_Rigid(Boxsize& Box, Atoms* System, ForceField FF
 void Check_WaveVector_CPUGPU(Boxsize& Box, Components& SystemComponents);
 */
 
-double CreateMolecule_InOneBox(Components& SystemComponents, Simulations& Sims, ForceField FF, RandomNumber& Random, WidomStruct Widom, bool AlreadyHasFractionalMolecule);
+double CreateMolecule_InOneBox(Variables& Vars, size_t systemId, bool AlreadyHasFractionalMolecule);
 
 void Run_Simulation_MultipleBoxes(Variables& Vars, int SimulationMode);
 

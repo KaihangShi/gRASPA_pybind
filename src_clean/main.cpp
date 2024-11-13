@@ -314,7 +314,7 @@ Variables pymain(void) //for pybind
     //////////////////////////////////////////////////////////
     // CREATE MOLECULES IN THE BOX BEFORE SIMULAITON STARTS //
     //////////////////////////////////////////////////////////
-    Energy[a].running_energy = CreateMolecule_InOneBox(Vars.SystemComponents[a], Vars.Sims[a], Vars.device_FF, Vars.Random, Vars.Widom[a], AlreadyHasFractionalMolecule);
+    Energy[a].running_energy = CreateMolecule_InOneBox(Vars, a, AlreadyHasFractionalMolecule);
 
     Check_Simulation_Energy(Vars.Box[a], Vars.SystemComponents[a].HostSystem, Vars.FF, Vars.device_FF, Vars.SystemComponents[a], CREATEMOL, a, Vars.Sims[a], true);
   }
@@ -685,7 +685,7 @@ int main(void) //normal cpp
     //////////////////////////////////////////////////////////
     // CREATE MOLECULES IN THE BOX BEFORE SIMULAITON STARTS //
     //////////////////////////////////////////////////////////
-    Energy[a].running_energy = CreateMolecule_InOneBox(Vars.SystemComponents[a], Vars.Sims[a], Vars.device_FF, Vars.Random, Vars.Widom[a], AlreadyHasFractionalMolecule);
+    Energy[a].running_energy = CreateMolecule_InOneBox(Vars, a, AlreadyHasFractionalMolecule);
 
     Check_Simulation_Energy(Vars.Box[a], Vars.SystemComponents[a].HostSystem, Vars.FF, Vars.device_FF, Vars.SystemComponents[a], CREATEMOL, a, Vars.Sims[a], true);
   }
