@@ -331,51 +331,54 @@ Variables pymain(void) //for pybind
   ///////////////////////////
   // INITIALIZATION CYCLES //
   ///////////////////////////
-  if(RunOneByOne)
-  {
-    for(size_t i = 0; i < NumberOfSimulations; i++)
-    {
-      if(i > 0 && RunSingleSim) continue; 
-      fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
-      Vars.SimulationMode = INITIALIZATION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
-    }
-  }
-  else if(RunTogether)
-  {
-    Run_Simulation_MultipleBoxes(Vars, INITIALIZATION);
-  }
-  //////////////////////////
-  // EQUILIBRATION CYCLES //
-  //////////////////////////
+  Vars.SimulationMode = INITIALIZATION;
   if(RunOneByOne)
   {
     for(size_t i = 0; i < NumberOfSimulations; i++)
     {
       if(i > 0 && RunSingleSim) continue;
       fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
-      Vars.SimulationMode = EQUILIBRATION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
+      Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
     }
   }
   else if(RunTogether)
   {
-    Run_Simulation_MultipleBoxes(Vars, EQUILIBRATION);
+    Run_Simulation_MultipleBoxes(Vars);
+  }
+  //////////////////////////
+  // EQUILIBRATION CYCLES //
+  //////////////////////////
+  Vars.SimulationMode = EQUILIBRATION;
+  if(RunOneByOne)
+  {
+    for(size_t i = 0; i < NumberOfSimulations; i++)
+    {
+      if(i > 0 && RunSingleSim) continue;
+      fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
+      Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
+    }
+  }
+  else if(RunTogether)
+  {
+    Run_Simulation_MultipleBoxes(Vars);
   }
   
   ///////////////////////
   // PRODUCTION CYCLES //
   ///////////////////////
+  Vars.SimulationMode = PRODUCTION;
   if(RunOneByOne)
   {
     for(size_t i = 0; i < NumberOfSimulations; i++)
     {
       if(i > 0 && RunSingleSim) continue;
       fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
-      Vars.SimulationMode = PRODUCTION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
+      Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
     }
   }
   else if(RunTogether)
   {
-    Run_Simulation_MultipleBoxes(Vars, PRODUCTION);
+    Run_Simulation_MultipleBoxes(Vars);
   }
 
   printf("========================\n");
@@ -405,7 +408,7 @@ Variables pymain(void) //for pybind
   /////////////////////////////////////////////////////////
   // Check if the Ewald Diff and running Diff make sense //
   /////////////////////////////////////////////////////////
-  ENERGY_SUMMARY(Vars.SystemComponents, Vars.Constants);
+  ENERGY_SUMMARY(Vars);
 
   GenerateSummaryAtEnd(0, Vars.SystemComponents, Vars.Sims, Vars.FF, Vars.Box);
   //Check CPU mem used//
@@ -702,51 +705,54 @@ int main(void) //normal cpp
   ///////////////////////////
   // INITIALIZATION CYCLES //
   ///////////////////////////
+  Vars.SimulationMode = INITIALIZATION;
   if(RunOneByOne)
   {
     for(size_t i = 0; i < NumberOfSimulations; i++)
     {
       if(i > 0 && RunSingleSim) continue; 
       fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
-      Vars.SimulationMode = INITIALIZATION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
+      Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
     }
   }
   else if(RunTogether)
   {
-    Run_Simulation_MultipleBoxes(Vars, INITIALIZATION);
+    Run_Simulation_MultipleBoxes(Vars);
   }
   //////////////////////////
   // EQUILIBRATION CYCLES //
   //////////////////////////
+  Vars.SimulationMode = EQUILIBRATION;
   if(RunOneByOne)
   {
     for(size_t i = 0; i < NumberOfSimulations; i++)
     {
       if(i > 0 && RunSingleSim) continue;
       fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
-      Vars.SimulationMode = EQUILIBRATION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
+      Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
     }
   }
   else if(RunTogether)
   {
-    Run_Simulation_MultipleBoxes(Vars, EQUILIBRATION);
+    Run_Simulation_MultipleBoxes(Vars);
   }
   
   ///////////////////////
   // PRODUCTION CYCLES //
   ///////////////////////
+  Vars.SimulationMode = PRODUCTION;
   if(RunOneByOne)
   {
     for(size_t i = 0; i < NumberOfSimulations; i++)
     {
       if(i > 0 && RunSingleSim) continue;
       fprintf(Vars.SystemComponents[i].OUTPUT, "Running Simulation Boxes in SERIAL, currently [%zu] box; pres: %.5f, temp: %.5f\n", i, Vars.SystemComponents[i].Pressure, Vars.SystemComponents[i].Temperature);
-      Vars.SimulationMode = PRODUCTION; Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
+      Energy[i].running_energy += Run_Simulation_ForOneBox(Vars, i);
     }
   }
   else if(RunTogether)
   {
-    Run_Simulation_MultipleBoxes(Vars, PRODUCTION);
+    Run_Simulation_MultipleBoxes(Vars);
   }
 
   printf("========================\n");
@@ -776,7 +782,7 @@ int main(void) //normal cpp
   /////////////////////////////////////////////////////////
   // Check if the Ewald Diff and running Diff make sense //
   /////////////////////////////////////////////////////////
-  ENERGY_SUMMARY(Vars.SystemComponents, Vars.Constants);
+  ENERGY_SUMMARY(Vars);
 
   GenerateSummaryAtEnd(0, Vars.SystemComponents, Vars.Sims, Vars.FF, Vars.Box);
   //Check CPU mem used//
@@ -795,4 +801,4 @@ int main(void) //normal cpp
   return 0;  //normal cpp
   //return Vars; //for pybind
 }
-#include "pybind.h"
+//// // #include "pybind.h"

@@ -17,7 +17,7 @@ void Check_WaveVector_CPUGPU(Boxsize& Box, Components& SystemComponents);
 
 double CreateMolecule_InOneBox(Variables& Vars, size_t systemId, bool AlreadyHasFractionalMolecule);
 
-void Run_Simulation_MultipleBoxes(Variables& Vars, int SimulationMode);
+void Run_Simulation_MultipleBoxes(Variables& Vars);
 
 double Run_Simulation_ForOneBox(Variables& Vars, size_t box_index);
 

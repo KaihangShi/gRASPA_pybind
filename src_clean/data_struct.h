@@ -930,6 +930,8 @@ struct Components
   
   double HeliumVoidFraction = 0.0;
   double ExcessVolume       = 0.0;
+
+  double createmol_energy = 0.0; //total create_mol phase energy, used when computing heat of adsorption//
   //std::vector<double2>EnergyAverage;
   /*
   //Zhao's note: do not use pass by ref for DeltaE
@@ -1028,6 +1030,10 @@ struct Components
   std::vector<double3> MaxTranslation;
   std::vector<double3> MaxRotation;
   std::vector<double3> MaxSpecialRotation;
+  //Some CBCF variables//
+  std::vector<size_t> CBCFPerformed;
+  size_t WLSampled     = 0;
+  size_t WLAdjusted    = 0;
   std::vector<double>Tc;                              // Critical Temperature of the component
   std::vector<double>Pc;                              // Critical Pressure of the component
   std::vector<double>Accentric;                       // Accentric Factor of the component
@@ -1223,6 +1229,7 @@ struct Variables
   int NumberOfInitializationCycles = 0;
   int NumberOfEquilibrationCycles  = 0;
   int NumberOfProductionCycles     = 0;
+  int Cycles = 0; //Current cycle//
 
   size_t StructureFactor_Multiplier = 2; //Add extra structure factor storage for volume moves//
 
@@ -1231,6 +1238,8 @@ struct Variables
   size_t MaxStepPerCycle = 0;
   bool SetMaxStep = false;
   int SimulationMode = INITIALIZATION;
+  std::string Mode   = "INITIALIZATION";
+  int BlockAverageSize = 1; //# of cycle/steps each block has//
   //Simulation Structs//
   Units Constants; //Physical constants for the simulation//
 
