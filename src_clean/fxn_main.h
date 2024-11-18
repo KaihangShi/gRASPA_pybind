@@ -470,8 +470,10 @@ inline void PRINT_ENERGY_AT_STAGE(Components& SystemComponents, int stage, Units
   fprintf(SystemComponents.OUTPUT, "Total Energy:               %.5f (%.5f [K])\n", E.total(), E.total() * Constants.energy_to_kelvin);
   fprintf(SystemComponents.OUTPUT, "========================================================================\n");
 }
-inline void ENERGY_SUMMARY(std::vector<Components>& SystemComponents, Units& Constants)
+inline void ENERGY_SUMMARY(Variables& Vars)
 {
+  std::vector<Components>& SystemComponents = Vars.SystemComponents;
+  Units& Constants = Vars.Constants;
   size_t NumberOfSimulations = SystemComponents.size();
   for(size_t i = 0; i < NumberOfSimulations; i++)
   {

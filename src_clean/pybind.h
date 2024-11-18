@@ -192,6 +192,12 @@ T square(T x)
   return x * x;
 }
 
+//MoveEnergy add/substract//
+void MoveEnergy_Add(MoveEnergy& A, MoveEnergy& B)
+{
+  A += B;
+}
+
 PYBIND11_MODULE(gRASPA, m)
 {
   py::class_<double2>(m, "double2")
@@ -262,7 +268,7 @@ PYBIND11_MODULE(gRASPA, m)
     .def("print", &MoveEnergy::print, "print the energies");
   //m.def("DeviceRandom", &DeviceRandom, "RandomNumber on GPU");
   //m.def("set_value", &set_value, "Set value");
-  m.def("RUN", &pymain, "RUN SIMULATION");
+ 
 
   py::enum_<SIMULATION_MODE>(m, "SIMULATION_MODE")
     .value("CREATE_MOLECULE", CREATE_MOLECULE)
@@ -322,6 +328,34 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("VDWRealBias", &Input_Container::VDWRealBias)
     .def_readwrite("OverlapCriteria", &Input_Container::OverlapCriteria)
     .def_readwrite("noCharges", &Input_Container::noCharges);
+
+  
+  py::class_<MoveTempStorage>(m, "MoveTempStorage")
+    .def(py::init<>())
+    .def_readwrite("RandomNumber", &MoveTempStorage::RandomNumber)
+    .def_readwrite("systemId",     &MoveTempStorage::systemId)
+    .def_readwrite("component",    &MoveTempStorage::component)
+    .def_readwrite("MoveType",     &MoveTempStorage::MoveType)
+    .def_readwrite("molecule",     &MoveTempStorage::molecule);
+
+  py::class_<Move_Statistics>(m, "Move_Statistics")
+    .def(py::init<>())
+    .def_readwrite("TranslationProb", &Move_Statistics::TranslationProb)
+    .def_readwrite("RotationProb",    &Move_Statistics::RotationProb)
+    .def_readwrite("SwapProb",        &Move_Statistics::SwapProb)
+    .def_readwrite("ReinsertionProb", &Move_Statistics::ReinsertionProb);
+
+  py::class_<Components>(m, "Components")
+    .def(py::init<>())
+    .def_readwrite("Moves", &Components::Moves)
+    .def_readwrite("deltaE", &Components::deltaE)
+    .def_readwrite("NumberOfMolecules", &Components::NumberOfMolecule_for_Component);
+    /*
+    .def_readwrite("", &Components::Moves);
+    .def_readwrite("Moves", &Components::Moves);
+    .def_readwrite("Moves", &Components::Moves);
+    .def_readwrite("Moves", &Components::Moves);
+    */
     
   py::class_<Variables>(m, "Variables")
     .def(py::init<>())
@@ -335,26 +369,60 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("NumberOfInitializationCycles", &Variables::NumberOfInitializationCycles)
     .def_readwrite("NumberOfEquilibrationCycles", &Variables::NumberOfEquilibrationCycles)
     .def_readwrite("NumberOfProductionCycles", &Variables::NumberOfProductionCycles)
-    .def_readwrite("SimulationMode", &Variables::SimulationMode);
+    .def_readwrite("SimulationMode",  &Variables::SimulationMode)
+    .def_readwrite("SystemComponents",  &Variables::SystemComponents)
+    .def_readwrite("MCMoveVariables", &Variables::TempVal);
 
   m.def("get_arr", &get_arr<double>, "Variable", "NAME");
 
-  m.def("CopyAtomDataFromGPU", &CopyAtomDataFromGPU, "Variable", "systemId", "component");
-  m.def("GetAllAtoms", &GetAllAtoms, "Variable", "systemId", "component");
-  m.def("GetPseudoAtomDefinitions", &GetPseudoAtomDefinitions, "Variable");
+  //Copy Data and get data from gRASPA to python//
+  m.def("CopyAtomDataFromGPU", &CopyAtomDataFromGPU, py::arg("Variable"), py::arg("systemId"), py::arg("component"));
+  m.def("GetAllAtoms", &GetAllAtoms, py::arg("Variable"), py::arg("systemId"), py::arg("component"));
+  m.def("GetPseudoAtomDefinitions", &GetPseudoAtomDefinitions, py::arg("Variable"));
+
+  //Check final energy and energy drifts//
+  m.def("get_total_energy", &check_energy_wrapper, "get total energy", py::arg("Var"), py::arg("SimulationIndex"));
+  m.def("final_energy_summary", &ENERGY_SUMMARY, "summarize final energy and energy drifts", py::arg("Variable"));
 
   //m.def("get_total_energy", &check_energy_wrapper, "get total energy", "Var", "SimulationIndex"_a=0);
-  m.def("get_total_energy", &check_energy_wrapper, "get total energy", "Var", "SimulationIndex");
+
+  //Enums//
+  //MoveTypes//
+  py::enum_<MoveTypes>(m, "MoveTypes")
+    .value("TRANSLATION", MoveTypes::TRANSLATION)
+    .value("ROTATION", MoveTypes::ROTATION)
+    .value("SINGLE_INSERTION", MoveTypes::SINGLE_INSERTION)
+    .value("SINGLE_DELETION", MoveTypes::SINGLE_DELETION);
+
+  //HELPER FUNCTIONS//
+  m.def("Get_Uniform_Random", &Get_Uniform_Random, "Get a random number from gRASPA's side");
+  m.def("MoveEnergy_Add", &MoveEnergy_Add, py::arg("A"), py::arg("B"));
+  m.def("omp_get_wtime", &omp_get_wtime);
+  //GENERAL SIMULATION//
+  //The following three combines into a full, normal gRASPA simulation//
+  m.def("Initialize", &Initialize, "Initialize SIMULATION");
+  m.def("RUN", &RunSimulation, "Run SIMULATION");
+  m.def("finalize", &EndOfSimulationWrapUp, "Final wrap up SIMULATION");
+
+  //MOVES RELATED//
+  m.def("InitializeMC", &InitialMCBeforeMoves, "InitializeMC", py::arg("Variables"), py::arg("systemId"));
+  m.def("Determine_Number_Of_Steps", &Determine_Number_Of_Steps, py::arg("Variables"), py::arg("systemId"), py::arg("current_cycle"));
+
+  //m.def("Select_Box_Component_Molecule", &Select_Box_Component_Molecule, "Select_Box_Component_Molecule", py::arg("Variables"), py::arg("systemId"), py::arg("component"), py::arg("molecule"), py::arg("RandomNumber"), py::return_value_policy::reference_internal);
+  m.def("Select_Box_Component_Molecule", &Select_Box_Component_Molecule, "Select_Box_Component_Molecule", py::arg("Variables"), py::arg("systemId"));
+
+  m.def("GatherStatisticsDuringSimulation", &GatherStatisticsDuringSimulation, "GatherStatisticsDuringSimulation", py::arg("Variables"), py::arg("systemId"), py::arg("current_cycle"));
+  m.def("MCEndOfPhaseSummary", &MCEndOfPhaseSummary, "MCEndOfPhaseSummary", py::arg("Variables"));
+
+
   //RUN MOVES//
   m.def("Run_Simulation_ForOneBox", &Run_Simulation_ForOneBox, "run simulation for selected box", "Vars", "box_index", "SimulationMode");
 
-  m.def("ForceField_Processing", &ForceField_Processing, "Input");
-  m.def("Copy_InputLoader_Data", &Copy_InputLoader_Data, "Vars");
+  m.def("ForceField_Processing", &ForceField_Processing, py::arg("Input"));
+  m.def("Copy_InputLoader_Data", &Copy_InputLoader_Data, py::arg("Vars"));
 
   // MC MOVES RELATED //
-  //m.def("SingleBodyMove", &SingleBodyMove, "Vars", "Box_Index", "Molecule_In_Component", "Component", "MoveType");
-  m.def("SingleBody_Prepare", &SingleBody_Prepare, "Vars", "Box_Index", "Molecule_In_Component", "Component", "MoveType");
-  m.def("SingleBody_Calculation", &SingleBody_Calculation, "Vars", "Box_Index", "Molecule_In_Component", "Component", "MoveType");
-  m.def("SingleBody_Acceptance", &SingleBody_Acceptance, "Vars", "Box_Index", "Molecule_In_Component", "Component", "MoveType", "move_energy");
-  //m.def("RunMoves", &RunMoves, "Run a single Monte Carlo Move");
+  m.def("SingleBody_Prepare", &SingleBody_Prepare, py::arg("Variables"), py::arg("systemId"));
+  m.def("SingleBody_Calculation", &SingleBody_Calculation, py::arg("Vars"), py::arg("systemId"));
+  m.def("SingleBody_Acceptance", &SingleBody_Acceptance, py::arg("Vars"), py::arg("Box_Index"), py::arg("delta_energy"));
 }

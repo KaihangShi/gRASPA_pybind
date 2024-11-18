@@ -1214,6 +1214,15 @@ struct Input_Container
 //so we can use some middle-storage//
 struct MoveTempStorage
 {
+  //Move Selection//
+  //Need random number, selected box, selected molecule, selected component//
+  double RandomNumber = 0.0;
+  size_t systemId     = 0;
+  size_t component    = 0;
+  size_t molecule     = 0;
+  int    MoveType     = TRANSLATION;
+ 
+  //within the move//
   bool   Overlap= false;
   bool   CheckOverlap= true;
   bool   Do_New = false;
@@ -1221,6 +1230,24 @@ struct MoveTempStorage
   size_t start_position = 0;
   size_t selectedTrial = 0;
   size_t selectedTrialOrientation = 0;
+
+  void Initialize()
+  {
+    RandomNumber = 0.0;
+    systemId     = 0;
+    component    = 0;
+    molecule     = 0;
+    MoveType     = TRANSLATION;
+
+    Overlap= false;
+    CheckOverlap= true;
+    Do_New = false;
+    Do_Old = false;
+    start_position = 0;
+    selectedTrial = 0;
+    selectedTrialOrientation = 0;
+  }
+
 };
 
 struct Variables
@@ -1230,6 +1257,9 @@ struct Variables
   int NumberOfEquilibrationCycles  = 0;
   int NumberOfProductionCycles     = 0;
   int Cycles = 0; //Current cycle//
+
+  bool RunOneByOne = true;
+  bool RunTogether = false;
 
   size_t StructureFactor_Multiplier = 2; //Add extra structure factor storage for volume moves//
 

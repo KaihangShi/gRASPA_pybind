@@ -6,13 +6,17 @@
 
 //Zhao's note: decompose the single body move into different sections: preparation, calculation, and acceptance //
 //For easier manipulation of moves, to use for, for example, MLP //
-inline void SingleBody_Prepare(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType)
+inline void SingleBody_Prepare(Variables& Vars, size_t systemId)
 {
   Components& SystemComponents = Vars.SystemComponents[systemId];
   Simulations& Sims            = Vars.Sims[systemId];
   ForceField& FF               = Vars.device_FF;
   RandomNumber& Random         = Vars.Random;
   WidomStruct& Widom           = Vars.Widom[systemId];
+
+  size_t& SelectedMolInComponent = Vars.TempVal.molecule;
+  size_t& SelectedComponent      = Vars.TempVal.component;
+  int&    MoveType               = Vars.TempVal.MoveType;
 
   bool& Do_New  = Vars.TempVal.Do_New;
   bool& Do_Old  = Vars.TempVal.Do_Old;
@@ -75,14 +79,18 @@ inline void SingleBody_Prepare(Variables& Vars, size_t systemId, size_t Selected
   Random.Update(Molsize);
 }
 
-inline MoveEnergy SingleBody_Calculation(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType)
+inline MoveEnergy SingleBody_Calculation(Variables& Vars, size_t systemId)
 {
   Components& SystemComponents = Vars.SystemComponents[systemId];
   Simulations& Sims            = Vars.Sims[systemId];
   ForceField& FF               = Vars.device_FF;
   WidomStruct& Widom           = Vars.Widom[systemId];
 
-  bool& CheckOverlap = Vars.TempVal.CheckOverlap; CheckOverlap = true;
+  //size_t& SelectedMolInComponent = Vars.TempVal.molecule;
+  size_t& SelectedComponent      = Vars.TempVal.component;
+  int&    MoveType               = Vars.TempVal.MoveType;
+
+  bool& CheckOverlap = Vars.TempVal.CheckOverlap; //CheckOverlap = true;
   bool& Do_New  = Vars.TempVal.Do_New;
   bool& Do_Old  = Vars.TempVal.Do_Old;
 
@@ -208,12 +216,16 @@ inline MoveEnergy SingleBody_Calculation(Variables& Vars, size_t systemId, size_
   return tot;
 }
 
-inline void SingleBody_Acceptance(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType, MoveEnergy& tot)
+inline void SingleBody_Acceptance(Variables& Vars, size_t systemId, MoveEnergy& tot)
 {
   Components& SystemComponents = Vars.SystemComponents[systemId];
   Simulations& Sims            = Vars.Sims[systemId];
   ForceField& FF               = Vars.device_FF;
   WidomStruct& Widom           = Vars.Widom[systemId];
+
+  size_t& SelectedMolInComponent = Vars.TempVal.molecule;
+  size_t& SelectedComponent      = Vars.TempVal.component;
+  int&    MoveType               = Vars.TempVal.MoveType;
 
   size_t Molsize = SystemComponents.Moleculesize[SelectedComponent]; //Get the size of the selected Molecule
   size_t& start_position = Vars.TempVal.start_position;
@@ -287,10 +299,10 @@ inline void SingleBody_Acceptance(Variables& Vars, size_t systemId, size_t Selec
   //return Accept;
 }
 
-inline MoveEnergy SingleBodyMove(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType)
+inline MoveEnergy SingleBodyMove(Variables& Vars, size_t systemId)
 {
-  SingleBody_Prepare(Vars, systemId, SelectedMolInComponent, SelectedComponent, MoveType);
-  MoveEnergy tot = SingleBody_Calculation(Vars, systemId, SelectedMolInComponent, SelectedComponent, MoveType);
-  SingleBody_Acceptance(Vars, systemId, SelectedMolInComponent, SelectedComponent, MoveType, tot);
+  SingleBody_Prepare(Vars, systemId);
+  MoveEnergy tot = SingleBody_Calculation(Vars, systemId);
+  SingleBody_Acceptance(Vars, systemId, tot);
   return tot;
 }

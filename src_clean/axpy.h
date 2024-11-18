@@ -19,15 +19,24 @@ double CreateMolecule_InOneBox(Variables& Vars, size_t systemId, bool AlreadyHas
 
 void Run_Simulation_MultipleBoxes(Variables& Vars);
 
-double Run_Simulation_ForOneBox(Variables& Vars, size_t box_index);
+void Run_Simulation_ForOneBox(Variables& Vars, size_t box_index);
 
 void Setup_threadblock(size_t arraysize, size_t *Nblock, size_t *Nthread);
 
-MoveEnergy SingleBodyMove(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType);
+MoveEnergy SingleBodyMove(Variables& Vars, size_t systemId);
 
-void SingleBody_Prepare(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType);
+void SingleBody_Prepare(Variables& Vars, size_t systemId);
 
-MoveEnergy SingleBody_Calculation(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType);
+MoveEnergy SingleBody_Calculation(Variables& Vars, size_t systemId);
 
-void SingleBody_Acceptance(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, int MoveType, MoveEnergy& tot);
+void SingleBody_Acceptance(Variables& Vars, size_t systemId, MoveEnergy& tot);
 
+void InitialMCBeforeMoves(Variables& Vars, size_t systemId);
+
+size_t Determine_Number_Of_Steps(Variables& Vars, size_t systemId, size_t current_cycle);
+
+void Select_Box_Component_Molecule(Variables& Vars, size_t box_index);
+
+void GatherStatisticsDuringSimulation(Variables& Vars, size_t systemId, size_t cycle);
+
+void MCEndOfPhaseSummary(Variables& Vars);
