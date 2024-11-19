@@ -112,17 +112,17 @@ void CopyAtomDataFromGPU(Variables& Vars, size_t systemId, size_t component)
   //Host_System[component].size      = device_System[component].size; //Zhao's note: no matter what, the size (not allocated size) needs to be updated
 
   cudaMemcpy(Host_System.pos, device_System[component].pos, \
-             sizeof(double3)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+             sizeof(double3)*device_System[component].size, cudaMemcpyDeviceToHost);
   cudaMemcpy(Host_System.scale, device_System[component].scale, \
-             sizeof(double)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+             sizeof(double)*device_System[component].size, cudaMemcpyDeviceToHost);
   cudaMemcpy(Host_System.charge, device_System[component].charge, \
-             sizeof(double)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+             sizeof(double)*device_System[component].size, cudaMemcpyDeviceToHost);
   cudaMemcpy(Host_System.scaleCoul, device_System[component].scaleCoul, \
-             sizeof(double)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+             sizeof(double)*device_System[component].size, cudaMemcpyDeviceToHost);
   cudaMemcpy(Host_System.Type, device_System[component].Type, \
-             sizeof(size_t)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+             sizeof(size_t)*device_System[component].size, cudaMemcpyDeviceToHost);
   cudaMemcpy(Host_System.MolID, device_System[component].MolID, \
-             sizeof(size_t)*device_System[component].Allocate_size, cudaMemcpyDeviceToHost);
+             sizeof(size_t)*device_System[component].size, cudaMemcpyDeviceToHost);
   Host_System.size = device_System[component].size;
 }
 
@@ -131,12 +131,74 @@ void CopyAtomDataFromGPU(Variables& Vars, size_t systemId, size_t component)
 py::dict GetAllAtoms(Variables& Vars, size_t systemId, size_t component)
 {
   py::dict AtomDict;
+  CopyAtomDataFromGPU(Vars, systemId, component); //Copy the atom info for this component from GPU to CPU//
   Atoms& HostSystem = Vars.SystemComponents[systemId].HostSystem[component];
   size_t size = HostSystem.size;
   AtomDict["pos"] = ptr_to_pyarray(HostSystem.pos, size);
   AtomDict["charge"] = ptr_to_pyarray(HostSystem.charge, size);
   AtomDict["Type"]   = ptr_to_pyarray(HostSystem.Type, size);
   AtomDict["MolID"]  = ptr_to_pyarray(HostSystem.MolID, size);
+  return AtomDict;
+}
+
+void UpdateAtomInfoHost(Atoms& HostSystem, Atoms& HostTrial, size_t Molsize, int& MoveType)
+{
+  for(size_t i = 0; i < Molsize; i++)
+  switch(MoveType)
+  {
+    case TRANSLATION: case ROTATION: case SINGLE_INSERTION: case SPECIAL_ROTATION: case INSERTION: case REINSERTION:
+    {
+      size_t MolID = HostTrial.MolID[i];
+      size_t index = Molsize * MolID + i;
+      HostSystem.pos[index]    = HostTrial.pos[i];
+      HostSystem.charge[index] = HostTrial.charge[i];
+      //Type should not change!//
+      HostSystem.MolID[index]  = HostTrial.MolID[i];
+      break;
+    }
+    case SINGLE_DELETION: case DELETION: //Copy the last molecule to the deleted one's place
+    {
+      size_t MolID = HostTrial.MolID[i];
+      size_t last_mol_index    = HostSystem.size - i - 1;
+      size_t index             = (Molsize + 1)* MolID - i - 1;
+      HostSystem.pos[index]    = HostSystem.pos[last_mol_index];
+      HostSystem.charge[index] = HostSystem.charge[last_mol_index];
+      //Type should not change!//
+    }
+  }
+  if(MoveType == SINGLE_INSERTION || MoveType == INSERTION) HostSystem.size += Molsize;
+  if(MoveType == SINGLE_DELETION  || MoveType == DELETION)  HostSystem.size -= Molsize;
+}
+
+py::dict GetTrialConfig(Variables& Vars, size_t systemId, size_t component, bool WholeConfig)
+{
+  py::dict AtomDict;
+  //Atoms& Trial = Vars.Sims[systemId].Old;
+  Atoms& Trial = Vars.Sims[systemId].New;
+  size_t start = 0; //copy from position 0
+  size_t size  = Vars.SystemComponents[systemId].Moleculesize[component];
+  Vars.SystemComponents[systemId].Copy_GPU_Data_To_Temp(Trial, start, size); //copied GPU trial position to CPU//
+  Atoms& HostTrial = Vars.SystemComponents[systemId].TempSystem;
+  HostTrial.size = Trial.size;
+
+  if(!WholeConfig) //Just transfer the trial configuration (just the moved parts)
+  {
+    AtomDict["Trial_pos"]    = ptr_to_pyarray(HostTrial.pos, size);
+    AtomDict["Trial_charge"] = ptr_to_pyarray(HostTrial.charge, size);
+    AtomDict["Trial_Type"]   = ptr_to_pyarray(HostTrial.Type, size);
+    AtomDict["Trial_MolID"]  = ptr_to_pyarray(HostTrial.MolID, size);
+  }
+  else //Transfer the whole component configuration
+  {
+    CopyAtomDataFromGPU(Vars, systemId, component); //Copy the atom info for this component from GPU to CPU//
+    Atoms& HostSystem = Vars.SystemComponents[systemId].HostSystem[component];
+    UpdateAtomInfoHost(HostSystem, HostTrial, size, Vars.TempVal.MoveType);
+    
+    AtomDict["Trial_pos"]    = ptr_to_pyarray(HostSystem.pos, HostSystem.size);
+    AtomDict["Trial_charge"] = ptr_to_pyarray(HostSystem.charge, HostSystem.size);
+    AtomDict["Trial_Type"]   = ptr_to_pyarray(HostSystem.Type, HostSystem.size);
+    AtomDict["Trial_MolID"]  = ptr_to_pyarray(HostSystem.MolID, HostSystem.size);
+  }
   return AtomDict;
 }
 
@@ -148,6 +210,17 @@ py::dict GetPseudoAtomDefinitions(Variables& Vars)
   Dict["Symbol"]      = py::cast(Vars.PseudoAtoms.Symbol);
   Dict["SymbolIndex"] = py::cast(Vars.PseudoAtoms.SymbolIndex);
   Dict["mass"]        = py::cast(Vars.PseudoAtoms.mass);
+  return Dict;
+}
+
+py::dict GetBox(Variables& Vars, size_t systemId)
+{
+  py::dict Dict;
+  Boxsize& Box = Vars.Box[systemId];
+  Dict["Cell"]        = ptr_to_pyarray(Box.Cell, 9);
+  Dict["InverseCell"] = ptr_to_pyarray(Box.InverseCell, 9);
+  Dict["Volume"]      = Box.Volume;
+  Dict["Cubic"]       = Box.Cubic;
   return Dict;
 }
 
@@ -375,10 +448,6 @@ PYBIND11_MODULE(gRASPA, m)
 
   m.def("get_arr", &get_arr<double>, "Variable", "NAME");
 
-  //Copy Data and get data from gRASPA to python//
-  m.def("CopyAtomDataFromGPU", &CopyAtomDataFromGPU, py::arg("Variable"), py::arg("systemId"), py::arg("component"));
-  m.def("GetAllAtoms", &GetAllAtoms, py::arg("Variable"), py::arg("systemId"), py::arg("component"));
-  m.def("GetPseudoAtomDefinitions", &GetPseudoAtomDefinitions, py::arg("Variable"));
 
   //Check final energy and energy drifts//
   m.def("get_total_energy", &check_energy_wrapper, "get total energy", py::arg("Var"), py::arg("SimulationIndex"));
@@ -386,7 +455,9 @@ PYBIND11_MODULE(gRASPA, m)
 
   //m.def("get_total_energy", &check_energy_wrapper, "get total energy", "Var", "SimulationIndex"_a=0);
 
-  //Enums//
+  ///////////
+  // Enums //
+  ///////////
   //MoveTypes//
   py::enum_<MoveTypes>(m, "MoveTypes")
     .value("TRANSLATION", MoveTypes::TRANSLATION)
@@ -394,17 +465,30 @@ PYBIND11_MODULE(gRASPA, m)
     .value("SINGLE_INSERTION", MoveTypes::SINGLE_INSERTION)
     .value("SINGLE_DELETION", MoveTypes::SINGLE_DELETION);
 
-  //HELPER FUNCTIONS//
+  //////////////////////
+  // HELPER FUNCTIONS //
+  //////////////////////
   m.def("Get_Uniform_Random", &Get_Uniform_Random, "Get a random number from gRASPA's side");
   m.def("MoveEnergy_Add", &MoveEnergy_Add, py::arg("A"), py::arg("B"));
   m.def("omp_get_wtime", &omp_get_wtime);
-  //GENERAL SIMULATION//
+  //Copy Data and get data from gRASPA to python//
+  m.def("CopyAtomDataFromGPU", &CopyAtomDataFromGPU, py::arg("Variable"), py::arg("systemId"), py::arg("component"));
+  m.def("GetAllAtoms", &GetAllAtoms, py::arg("Variable"), py::arg("systemId"), py::arg("component"));
+  m.def("GetBox", &GetBox, py::arg("Variable"), py::arg("systemId"));
+  m.def("GetPseudoAtomDefinitions", &GetPseudoAtomDefinitions, py::arg("Variable"));
+
+  m.def("GetTrialConfig", &GetTrialConfig, py::arg("Vars"), py::arg("systemId"), py::arg("component"), py::arg("WholeConfig"));
+ 
+  //////////////////////// 
+  // GENERAL SIMULATION //
+  ////////////////////////
   //The following three combines into a full, normal gRASPA simulation//
   m.def("Initialize", &Initialize, "Initialize SIMULATION");
   m.def("RUN", &RunSimulation, "Run SIMULATION");
   m.def("finalize", &EndOfSimulationWrapUp, "Final wrap up SIMULATION");
-
-  //MOVES RELATED//
+  ///////////////////
+  // MOVES RELATED //
+  ///////////////////
   m.def("InitializeMC", &InitialMCBeforeMoves, "InitializeMC", py::arg("Variables"), py::arg("systemId"));
   m.def("Determine_Number_Of_Steps", &Determine_Number_Of_Steps, py::arg("Variables"), py::arg("systemId"), py::arg("current_cycle"));
 
@@ -414,15 +498,15 @@ PYBIND11_MODULE(gRASPA, m)
   m.def("GatherStatisticsDuringSimulation", &GatherStatisticsDuringSimulation, "GatherStatisticsDuringSimulation", py::arg("Variables"), py::arg("systemId"), py::arg("current_cycle"));
   m.def("MCEndOfPhaseSummary", &MCEndOfPhaseSummary, "MCEndOfPhaseSummary", py::arg("Variables"));
 
-
-  //RUN MOVES//
+  ///////////////
+  // RUN MOVES //
+  ///////////////
   m.def("Run_Simulation_ForOneBox", &Run_Simulation_ForOneBox, "run simulation for selected box", "Vars", "box_index", "SimulationMode");
-
-  m.def("ForceField_Processing", &ForceField_Processing, py::arg("Input"));
-  m.def("Copy_InputLoader_Data", &Copy_InputLoader_Data, py::arg("Vars"));
-
-  // MC MOVES RELATED //
+  //SINGLE-BODY MOVE//
   m.def("SingleBody_Prepare", &SingleBody_Prepare, py::arg("Variables"), py::arg("systemId"));
   m.def("SingleBody_Calculation", &SingleBody_Calculation, py::arg("Vars"), py::arg("systemId"));
   m.def("SingleBody_Acceptance", &SingleBody_Acceptance, py::arg("Vars"), py::arg("Box_Index"), py::arg("delta_energy"));
+
+  m.def("ForceField_Processing", &ForceField_Processing, py::arg("Input"));
+  m.def("Copy_InputLoader_Data", &Copy_InputLoader_Data, py::arg("Vars"));
 }
