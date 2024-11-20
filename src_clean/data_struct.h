@@ -1221,7 +1221,7 @@ struct MoveTempStorage
   size_t component    = 0;
   size_t molecule     = 0;
   int    MoveType     = TRANSLATION;
- 
+
   //within the move//
   bool   Overlap= false;
   bool   CheckOverlap= true;
@@ -1230,6 +1230,8 @@ struct MoveTempStorage
   size_t start_position = 0;
   size_t selectedTrial = 0;
   size_t selectedTrialOrientation = 0;
+
+  bool   Accept = false;
 
   void Initialize()
   {
@@ -1246,6 +1248,8 @@ struct MoveTempStorage
     start_position = 0;
     selectedTrial = 0;
     selectedTrialOrientation = 0;
+
+    Accept = false;
   }
 
 };

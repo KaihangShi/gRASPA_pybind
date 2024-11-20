@@ -229,7 +229,8 @@ inline void SingleBody_Acceptance(Variables& Vars, size_t systemId, MoveEnergy& 
 
   size_t Molsize = SystemComponents.Moleculesize[SelectedComponent]; //Get the size of the selected Molecule
   size_t& start_position = Vars.TempVal.start_position;
-  bool Accept = false; 
+  bool& Accept = Vars.TempVal.Accept;
+  Accept = false;
 
   //Get Number of Molecules for this component (For updating TMMC)//
   double NMol = SystemComponents.NumberOfMolecule_for_Component[SelectedComponent];

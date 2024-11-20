@@ -160,10 +160,15 @@ void UpdateAtomInfoHost(Atoms& HostSystem, Atoms& HostTrial, size_t Molsize, int
     {
       size_t MolID = HostTrial.MolID[i];
       size_t last_mol_index    = HostSystem.size - i - 1;
-      size_t index             = (Molsize + 1)* MolID - i - 1;
-      HostSystem.pos[index]    = HostSystem.pos[last_mol_index];
-      HostSystem.charge[index] = HostSystem.charge[last_mol_index];
-      //Type should not change!//
+      size_t last_molID        = HostSystem.MolID[last_mol_index];
+      //If the last molecule is the one deleted, then no action needed
+      if(MolID != last_molID)
+      {
+        size_t index             = Molsize * (MolID + 1) - i - 1;
+        HostSystem.pos[index]    = HostSystem.pos[last_mol_index];
+        HostSystem.charge[index] = HostSystem.charge[last_mol_index];
+        //Type should not change!//
+      }
     }
   }
   if(MoveType == SINGLE_INSERTION || MoveType == INSERTION) HostSystem.size += Molsize;
@@ -183,10 +188,10 @@ py::dict GetTrialConfig(Variables& Vars, size_t systemId, size_t component, bool
 
   if(!WholeConfig) //Just transfer the trial configuration (just the moved parts)
   {
-    AtomDict["Trial_pos"]    = ptr_to_pyarray(HostTrial.pos, size);
-    AtomDict["Trial_charge"] = ptr_to_pyarray(HostTrial.charge, size);
-    AtomDict["Trial_Type"]   = ptr_to_pyarray(HostTrial.Type, size);
-    AtomDict["Trial_MolID"]  = ptr_to_pyarray(HostTrial.MolID, size);
+    AtomDict["pos"]    = ptr_to_pyarray(HostTrial.pos, size);
+    AtomDict["charge"] = ptr_to_pyarray(HostTrial.charge, size);
+    AtomDict["Type"]   = ptr_to_pyarray(HostTrial.Type, size);
+    AtomDict["MolID"]  = ptr_to_pyarray(HostTrial.MolID, size);
   }
   else //Transfer the whole component configuration
   {
@@ -194,10 +199,10 @@ py::dict GetTrialConfig(Variables& Vars, size_t systemId, size_t component, bool
     Atoms& HostSystem = Vars.SystemComponents[systemId].HostSystem[component];
     UpdateAtomInfoHost(HostSystem, HostTrial, size, Vars.TempVal.MoveType);
     
-    AtomDict["Trial_pos"]    = ptr_to_pyarray(HostSystem.pos, HostSystem.size);
-    AtomDict["Trial_charge"] = ptr_to_pyarray(HostSystem.charge, HostSystem.size);
-    AtomDict["Trial_Type"]   = ptr_to_pyarray(HostSystem.Type, HostSystem.size);
-    AtomDict["Trial_MolID"]  = ptr_to_pyarray(HostSystem.MolID, HostSystem.size);
+    AtomDict["pos"]    = ptr_to_pyarray(HostSystem.pos, HostSystem.size);
+    AtomDict["charge"] = ptr_to_pyarray(HostSystem.charge, HostSystem.size);
+    AtomDict["Type"]   = ptr_to_pyarray(HostSystem.Type, HostSystem.size);
+    AtomDict["MolID"]  = ptr_to_pyarray(HostSystem.MolID, HostSystem.size);
   }
   return AtomDict;
 }
@@ -409,6 +414,7 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("systemId",     &MoveTempStorage::systemId)
     .def_readwrite("component",    &MoveTempStorage::component)
     .def_readwrite("MoveType",     &MoveTempStorage::MoveType)
+    .def_readwrite("Accept",       &MoveTempStorage::Accept)
     .def_readwrite("molecule",     &MoveTempStorage::molecule);
 
   py::class_<Move_Statistics>(m, "Move_Statistics")
