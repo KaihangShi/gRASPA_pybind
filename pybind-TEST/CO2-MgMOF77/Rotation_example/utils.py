@@ -23,7 +23,7 @@ def calculate_angle(vector1, vector2):
   angle_deg = np.degrees(angle_rad)
   return angle_deg
 
-def WriteDataToPOSCAR(Vars, systemId, DATA, filename = "DATA"):
+def WriteDataToPOSCAR(Vars, systemId, DATA, filename = "DATA", exclusion = []):
   Box = g.GetBox(Vars, systemId)
   VectorA = Box["Cell"][0:3]
   VectorB = Box["Cell"][3:6]
@@ -38,6 +38,7 @@ def WriteDataToPOSCAR(Vars, systemId, DATA, filename = "DATA"):
   DATA_poscar = DATA_poscar[DATA_poscar[:, 3].argsort(kind='stable')]
   DATA_poscar_type, DATA_poscar_atomnumber = np.unique(DATA_poscar[:, 3], return_counts=True)
   DATA_poscar_xyz = DATA_poscar[:, :3]
+  PseudoAtom_Symbols = Vars.PseudoAtoms.Symbol
 
   # 写入文件 'POSCAR'
   with open(f'{filename}.vasp', 'w') as file:
@@ -46,7 +47,7 @@ def WriteDataToPOSCAR(Vars, systemId, DATA, filename = "DATA"):
     file.write(f'    {VectorA[0]} {VectorA[1]} {VectorA[2]}\n')
     file.write(f'    {VectorB[0]} {VectorB[1]} {VectorB[2]}\n')
     file.write(f'    {VectorC[0]} {VectorC[1]} {VectorC[2]}\n')
-    file.write(" ".join([f"Type={int(t)}" for t in DATA_poscar_type]) + "\n")
+    file.write(" ".join([f"{PseudoAtom_Symbols[int(t)]}" for t in DATA_poscar_type]) + "\n")
     file.write(f"{' '.join(map(str, DATA_poscar_atomnumber.astype(int)))}\n")
     file.write('Cartesian\n')
     for row in DATA_poscar_xyz:

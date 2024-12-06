@@ -137,26 +137,26 @@ inline MoveEnergy SingleBody_Calculation(Variables& Vars, size_t systemId)
   MoveEnergy tot; 
   if(!SystemComponents.flag[0] || !CheckOverlap)
   {
-    double BlockResult[Total_Nblock + Total_Nblock];
-    cudaMemcpy(BlockResult, Sims.Blocksum, 2 * Total_Nblock * sizeof(double), cudaMemcpyDeviceToHost);
+    //double BlockResult[Total_Nblock + Total_Nblock];
+    cudaMemcpy(SystemComponents.host_array, Sims.Blocksum, 2 * Total_Nblock * sizeof(double), cudaMemcpyDeviceToHost);
    
     //VDW Part and Real Part Coulomb//
     for(size_t i = 0; i < HH_Nblock; i++) 
     {
-      tot.HHVDW += BlockResult[i];
-      tot.HHReal+= BlockResult[i + Total_Nblock];
+      tot.HHVDW += SystemComponents.host_array[i];
+      tot.HHReal+= SystemComponents.host_array[i + Total_Nblock];
       //if(MoveType == SPECIAL_ROTATION) printf("HH Block %zu, VDW: %.5f, Real: %.5f\n", i, BlockResult[i], BlockResult[i + Total_Nblock]);
     }
     for(size_t i = HH_Nblock; i < HH_Nblock + HG_Nblock; i++) 
     {
-      tot.HGVDW += BlockResult[i];
-      tot.HGReal+= BlockResult[i + Total_Nblock];
+      tot.HGVDW += SystemComponents.host_array[i];
+      tot.HGReal+= SystemComponents.host_array[i + Total_Nblock];
       //printf("HG Block %zu, VDW: %.5f, Real: %.5f\n", i, BlockResult[i], BlockResult[i + Total_Nblock]);
     }
     for(size_t i = HH_Nblock + HG_Nblock; i < Total_Nblock; i++)
     {
-      tot.GGVDW += BlockResult[i];
-      tot.GGReal+= BlockResult[i + Total_Nblock];
+      tot.GGVDW += SystemComponents.host_array[i];
+      tot.GGReal+= SystemComponents.host_array[i + Total_Nblock];
       //printf("GG Block %zu, VDW: %.5f, Real: %.5f\n", i, BlockResult[i], BlockResult[i + Total_Nblock]);
     }
 
@@ -171,7 +171,7 @@ inline MoveEnergy SingleBody_Calculation(Variables& Vars, size_t systemId)
     if(!FF.noCharges && SystemComponents.hasPartialCharge[SelectedComponent])
     {
       double2 newScale  = SystemComponents.Lambda[SelectedComponent].SET_SCALE(1.0);
-      double2 EwaldE = GPU_EwaldDifference_General(Sims.Box, Sims.d_a, Sims.New, Sims.Old, FF, Sims.Blocksum, SystemComponents, SelectedComponent, MoveType, 0, newScale);
+      double2 EwaldE = GPU_EwaldDifference_General(Sims, FF, SystemComponents, SelectedComponent, MoveType, 0, newScale);
       if(HH_Nblock == 0)
       {
         tot.GGEwaldE = EwaldE.x;

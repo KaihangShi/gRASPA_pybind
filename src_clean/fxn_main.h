@@ -155,6 +155,15 @@ inline void Prepare_Widom(WidomStruct& Widom, Boxsize Box, Simulations& Sims, Co
 {
   //Zhao's note: NumberWidomTrials is for first bead. NumberWidomTrialsOrientations is for the rest, here we consider single component, not mixture //
 
+  size_t MaxTrial = max(Widom.NumberWidomTrials, Widom.NumberWidomTrialsOrientations);
+  SystemComponents.Rosen.reserve(MaxTrial);
+  SystemComponents.ExpRosen.reserve(MaxTrial);
+  SystemComponents.ShiftedBoltzmannFactors.reserve(MaxTrial);
+  SystemComponents.Trialindex.reserve(MaxTrial);
+  SystemComponents.TrialEnergies.reserve(MaxTrial);
+
+  printf("Rosen capacity: %zu\n", SystemComponents.Rosen.capacity());
+
   size_t MaxTrialsize = max(Widom.NumberWidomTrials, Widom.NumberWidomTrialsOrientations*(SystemComponents.Moleculesize[1]-1));
 
   //Zhao's note: The previous way yields a size for blocksum that can be smaller than the number of kpoints
@@ -184,6 +193,7 @@ inline void Prepare_Widom(WidomStruct& Widom, Boxsize Box, Simulations& Sims, Co
   printf("Allocated %zu double3 for reinsertion!\n", MaxAdsorbateMolsize * 2);
 
   cudaMallocHost(&Sims.Blocksum, blocksum_size*sizeof(double));
+  SystemComponents.host_array = (double*) malloc(blocksum_size*sizeof(double));
 
   cudaMallocManaged(&Sims.ExcludeList,        10 * sizeof(int2));
   for(size_t i = 0; i < 10; i++) Sims.ExcludeList[i] = {-1, -1}; //Initialize with negative # so that nothing is ignored//

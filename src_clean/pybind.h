@@ -435,7 +435,13 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("Moves", &Components::Moves);
     .def_readwrite("Moves", &Components::Moves);
     */
-    
+   
+  py::class_<PseudoAtomDefinitions>(m, "PseudoAtomDefinitions")
+    .def(py::init<>())
+    .def_readwrite("Name", &PseudoAtomDefinitions::Name)
+    .def_readwrite("Symbol", &PseudoAtomDefinitions::Symbol)
+    .def_readwrite("Mass", &PseudoAtomDefinitions::mass);
+ 
   py::class_<Variables>(m, "Variables")
     .def(py::init<>())
     .def("set_TEST", &Variables::set_TEST)
@@ -450,7 +456,9 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("NumberOfProductionCycles", &Variables::NumberOfProductionCycles)
     .def_readwrite("SimulationMode",  &Variables::SimulationMode)
     .def_readwrite("SystemComponents",  &Variables::SystemComponents)
+    .def_readwrite("PseudoAtoms",  &Variables::PseudoAtoms)
     .def_readwrite("MCMoveVariables", &Variables::TempVal);
+
 
   m.def("get_arr", &get_arr<double>, "Variable", "NAME");
 

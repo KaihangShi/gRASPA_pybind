@@ -2,7 +2,7 @@
 #include "mc_swap_utilities.h"
 #include "lambda.h"
 #include "mc_cbcfc.h"
-
+/*
 __global__ void StoreNewLocation_Reinsertion(Atoms Mol, Atoms NewMol, double3* temp, size_t SelectedTrial, size_t Moleculesize)
 {
   if(Moleculesize == 1) //Only first bead is inserted, first bead data is stored in NewMol
@@ -22,6 +22,23 @@ __global__ void StoreNewLocation_Reinsertion(Atoms Mol, Atoms NewMol, double3* t
     }
   }
 }
+*/
+__global__ void StoreNewLocation_Reinsertion(Atoms Mol, Atoms NewMol, double3* temp, size_t SelectedTrial, size_t Moleculesize)
+{
+  size_t i = threadIdx.x + blockIdx.x * blockDim.x;
+  if(i == 0)
+  {
+    if(Moleculesize == 1) temp[0] = NewMol.pos[SelectedTrial];
+    else temp[0] = Mol.pos[0];
+  }
+  else
+  {
+    size_t chainsize = Moleculesize - 1; // FOr trial orientations //
+    size_t selectsize = SelectedTrial*chainsize+(i-1);
+    temp[i] = NewMol.pos[selectsize];
+  }
+}
+
 
 __global__ void Update_Reinsertion_data(Atoms* d_a, double3* temp, size_t SelectedComponent, size_t UpdateLocation)
 {
@@ -78,7 +95,7 @@ static inline MoveEnergy Reinsertion(Variables& Vars, size_t systemId, size_t Se
   }
 
   //Store The New Locations//
-  StoreNewLocation_Reinsertion<<<1,1>>>(Sims.Old, Sims.New, SystemComponents.tempMolStorage, SelectedTrial, SystemComponents.Moleculesize[SelectedComponent]);
+  StoreNewLocation_Reinsertion<<<1,SystemComponents.Moleculesize[SelectedComponent]>>>(Sims.Old, Sims.New, SystemComponents.tempMolStorage, SelectedTrial, SystemComponents.Moleculesize[SelectedComponent]);
   /////////////
   // RETRACE //
   /////////////
@@ -168,7 +185,6 @@ static inline double WidomMove(Variables& Vars, size_t systemId, size_t Selected
   return Rosenbluth;
 }
 
-
 //Zhao's note: added feature for creating fractional molecules//
 static inline MoveEnergy CreateMolecule(Variables& Vars, size_t systemId, size_t SelectedMolInComponent, size_t SelectedComponent, double2 newScale)
 {
@@ -228,7 +244,7 @@ static inline MoveEnergy Insertion(Variables& Vars, size_t systemId, size_t Sele
   double preFactor = 0.0;
 
   double2 newScale = SystemComponents.Lambda[SelectedComponent].SET_SCALE(1.0); //Set scale for full molecule (lambda = 1.0)//
-  MoveEnergy energy = Insertion_Body(Vars, systemId, SelectedMolInComponent, SelectedComponent, Rosenbluth, SuccessConstruction, SelectedTrial, preFactor, false, newScale); 
+  MoveEnergy energy = Insertion_Body(Vars, systemId, SelectedMolInComponent, SelectedComponent, Rosenbluth, SuccessConstruction, SelectedTrial, preFactor, false, newScale);
   if(!SuccessConstruction) 
   {
     //If unsuccessful move (Overlap), Pacc = 0//
@@ -558,7 +574,7 @@ static inline MoveEnergy IdentitySwapMove(Variables& Vars, size_t systemId)
     energy += temp_energy;
   }
   // Store The New Locations //
-  StoreNewLocation_Reinsertion<<<1,1>>>(Sims.Old, Sims.New, SystemComponents.tempMolStorage, SelectedTrial, SystemComponents.Moleculesize[NEWComponent]);
+  StoreNewLocation_Reinsertion<<<1,SystemComponents.Moleculesize[NEWComponent]>>>(Sims.Old, Sims.New, SystemComponents.tempMolStorage, SelectedTrial, SystemComponents.Moleculesize[NEWComponent]);
 
   /////////////
   // RETRACE //

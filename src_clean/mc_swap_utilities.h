@@ -3,8 +3,6 @@ static inline MoveEnergy Insertion_Body(Variables& Vars, size_t systemId, size_t
   Components& SystemComponents = Vars.SystemComponents[systemId];
   Simulations& Sims            = Vars.Sims[systemId];
   ForceField& FF               = Vars.device_FF;
-  //RandomNumber& Random         = Vars.Random;
-  //WidomStruct& Widom           = Vars.Widom[systemId];
 
   MoveEnergy energy; double StoredR = 0.0;
   int CBMCType = CBMC_INSERTION; //Insertion//
@@ -13,8 +11,6 @@ static inline MoveEnergy Insertion_Body(Variables& Vars, size_t systemId, size_t
   if(Rosenbluth <= 1e-150) SuccessConstruction = false; //Zhao's note: added this protection bc of weird error when testing GibbsParticleXfer
   if(!SuccessConstruction)
   {
-    //printf("Rosenbluth SMALL: %s, Early return FirstBead\n", Rosenbluth <= 1e-150 ? "true" : "false");
-    //printf("FirstBead Exit Energy: "); energy.print();
     energy.zero();
     return energy;
   }
@@ -24,9 +20,8 @@ static inline MoveEnergy Insertion_Body(Variables& Vars, size_t systemId, size_t
     Rosenbluth*=Widom_Move_Chain_PARTIAL(Vars, systemId, SelectedMolInComponent, SelectedComponent, CBMCType, &SelectedTrial, &SuccessConstruction, &energy, SelectedFirstBeadTrial, newScale);
 
     if(Rosenbluth <= 1e-150) SuccessConstruction = false;
-    if(!SuccessConstruction) 
-    { 
-      //printf("Rosenbluth: %.5f, Early return Chain\n", Rosenbluth);
+    if(!SuccessConstruction)
+    {
       energy.zero();
       return energy;
     }
@@ -43,7 +38,7 @@ static inline MoveEnergy Insertion_Body(Variables& Vars, size_t systemId, size_t
   bool EwaldPerformed = false;
   if(!FF.noCharges && SystemComponents.hasPartialCharge[SelectedComponent])
   {
-    double2 EwaldE = GPU_EwaldDifference_General(Sims.Box, Sims.d_a, Sims.New, Sims.Old, FF, Sims.Blocksum, SystemComponents, SelectedComponent, MoveType, SelectedTrial, newScale);
+    double2 EwaldE = GPU_EwaldDifference_General(Sims, FF, SystemComponents, SelectedComponent, MoveType, SelectedTrial, newScale);
 
     energy.GGEwaldE = EwaldE.x;
     energy.HGEwaldE = EwaldE.y;
@@ -131,7 +126,7 @@ static inline MoveEnergy Deletion_Body(Variables& Vars, size_t systemId, size_t 
   {
     int MoveType = DELETION; if(Scale.y < 1.0) MoveType = CBCF_DELETION;
 
-    double2 EwaldE = GPU_EwaldDifference_General(Sims.Box, Sims.d_a, Sims.New, Sims.Old, FF, Sims.Blocksum, SystemComponents, SelectedComponent, MoveType, UpdateLocation, Scale);
+    double2 EwaldE = GPU_EwaldDifference_General(Sims, FF, SystemComponents, SelectedComponent, MoveType, UpdateLocation, Scale);
     Rosenbluth /= std::exp(-SystemComponents.Beta * (EwaldE.x + EwaldE.y));
     energy.GGEwaldE = -1.0 * EwaldE.x;
     energy.HGEwaldE = -1.0 * EwaldE.y; //Becareful with the sign here, you need a HG sum, but HGVDWReal and HGEwaldE here have opposite signs???//

@@ -896,6 +896,15 @@ struct Components
   size_t  EnergyEvalTimes = 0;
 
   bool*   flag;                                       // flags for checking overlaps (on host), device version in Simulations struct//
+  double* host_array;
+  //MC CBMC/Calculation variables//
+  std::vector<size_t>Trialindex;
+  std::vector<double>ExpRosen;
+  std::vector<double>Rosen;
+  std::vector<double>ShiftedBoltzmannFactors;
+  std::vector<MoveEnergy>TrialEnergies;
+  double MaxRosen = 0.0; double SumRosen=0.0;
+
   size_t EikAllocateSize = 0;
   size_t tempEikAllocateSize = 0;
 

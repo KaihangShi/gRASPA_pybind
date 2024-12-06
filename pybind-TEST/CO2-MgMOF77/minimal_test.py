@@ -19,10 +19,10 @@ comp = W.MCMoveVariables.component
 mol  = W.MCMoveVariables.molecule
 
 #NOTE: decomment each one of the three to test them#
-#MoveType = g.MoveTypes.SINGLE_INSERTION
+MoveType = g.MoveTypes.SINGLE_INSERTION
 #MoveType = g.MoveTypes.SINGLE_DELETION
 #MoveType = g.MoveTypes.ROTATION
-MoveType = g.MoveTypes.TRANSLATION
+#MoveType = g.MoveTypes.TRANSLATION
 
 W.MCMoveVariables.MoveType = int(MoveType)
 

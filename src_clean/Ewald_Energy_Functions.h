@@ -412,10 +412,17 @@ void Update_Vector_Ewald(Boxsize& Box, bool CPU, Components& SystemComponents, s
 ////////////////////////////////////////////////
 // Main Ewald Functions (Fourier + Exclusion) //
 ////////////////////////////////////////////////
-double2 GPU_EwaldDifference_General(Boxsize& Box, Atoms*& d_a, Atoms& New, Atoms& Old, ForceField& FF, double* Blocksum, Components& SystemComponents, size_t SelectedComponent, int MoveType, size_t Location, double2 Scale)
+double2 GPU_EwaldDifference_General(Simulations& Sim, ForceField& FF, Components& SystemComponents, size_t SelectedComponent, int MoveType, size_t Location, double2 Scale)
 {
   if(FF.noCharges && !SystemComponents.hasPartialCharge[SelectedComponent]) return {0.0, 0.0};
   //cudaDeviceSynchronize();
+
+  Boxsize& Box = Sim.Box;
+  Atoms*& d_a  = Sim.d_a;
+  Atoms& New   = Sim.New;
+  Atoms& Old   = Sim.Old;
+  double* Blocksum = Sim.Blocksum;
+
   double start = omp_get_wtime();
   double alpha = Box.Alpha; double alpha_squared = alpha * alpha;
   double prefactor = Box.Prefactor * (2.0 * M_PI / Box.Volume);
@@ -503,10 +510,10 @@ double2 GPU_EwaldDifference_General(Boxsize& Box, Atoms*& d_a, Atoms& New, Atoms
   //If we separate Host-Guest from Guest-Guest, we can double the Nblock, so the first half does Guest-Guest, and the second half does Host-Guest//
   Fourier_Ewald_Diff<<<Nblock * 2, Nthread, Nthread * sizeof(double)>>>(Box, SameType, CrossType, Old, alpha_squared, prefactor, Box.kmax, Oldsize, Newsize, Blocksum, UseTempVector, Nblock);
   
-  double sum[Nblock * 2]; double SameSum = 0.0; double CrossSum = 0.0;
-  cudaMemcpy(sum, Blocksum, 2 * Nblock * sizeof(double), cudaMemcpyDeviceToHost); //HG + GG Energies//
-  for(size_t i = 0; i < Nblock; i++){SameSum += sum[i];}
-  for(size_t i = Nblock; i < 2 * Nblock; i++){CrossSum += sum[i];}
+  double SameSum = 0.0; double CrossSum = 0.0;
+  cudaMemcpy(SystemComponents.host_array, Blocksum, 2 * Nblock * sizeof(double), cudaMemcpyDeviceToHost); //HG + GG Energies//
+  for(size_t i = 0; i < Nblock; i++){SameSum += SystemComponents.host_array[i];}
+  for(size_t i = Nblock; i < 2 * Nblock; i++){CrossSum += SystemComponents.host_array[i];}
   //Zhao's note: when adding fractional molecules, this might not be correct//
   double deltaExclusion = 0.0;
   
@@ -568,11 +575,12 @@ double2 GPU_EwaldDifference_Reinsertion(Boxsize& Box, Atoms*& d_a, Atoms& Old, d
   size_t numberOfStructureFactors = (Box.kmax.x + 1) * (2 * Box.kmax.y + 1) * (2 * Box.kmax.z + 1);
   Nblock = 0; Nthread = 0; Setup_threadblock(numberOfStructureFactors, &Nblock, &Nthread);
   Fourier_Ewald_Diff<<<Nblock * 2, Nthread, Nthread * sizeof(double)>>>(Box, SameType, CrossType, Old, alpha_squared, prefactor, Box.kmax, Oldsize, Newsize, Blocksum, false, Nblock);
-  double sum[Nblock * 2]; double SameSum = 0.0;  double CrossSum = 0.0;
-  cudaMemcpy(sum, Blocksum, 2 * Nblock * sizeof(double), cudaMemcpyDeviceToHost);
+  //double sum[Nblock * 2]; 
+  double SameSum = 0.0;  double CrossSum = 0.0;
+  cudaMemcpy(SystemComponents.host_array, Blocksum, 2 * Nblock * sizeof(double), cudaMemcpyDeviceToHost);
 
-  for(size_t i = 0; i < Nblock; i++){SameSum += sum[i];}
-  for(size_t i = Nblock; i < 2 * Nblock; i++){CrossSum += sum[i];}
+  for(size_t i = 0; i < Nblock; i++){SameSum += SystemComponents.host_array[i];}
+  for(size_t i = Nblock; i < 2 * Nblock; i++){CrossSum += SystemComponents.host_array[i];}
 
   return {SameSum, 2.0 * CrossSum};
 }

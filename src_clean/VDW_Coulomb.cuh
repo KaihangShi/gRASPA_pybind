@@ -106,7 +106,7 @@ void Copy_Ewald_Vector(Simulations& Sim);
 
 void Update_Vector_Ewald(Boxsize& Box, bool CPU, Components& SystemComponents, size_t SelectedComponent);
 
-double2 GPU_EwaldDifference_General(Boxsize& Box, Atoms*& d_a, Atoms& New, Atoms& Old, ForceField& FF, double* Blocksum, Components& SystemComponents, size_t SelectedComponent, int MoveType, size_t Location, double2 proposed_scale);
+double2 GPU_EwaldDifference_General(Simulations& Sim, ForceField& FF, Components& SystemComponents, size_t SelectedComponent, int MoveType, size_t Location, double2 proposed_scale);
 
 double2 GPU_EwaldDifference_LambdaChange(Boxsize& Box, Atoms*& d_a, Atoms& Old, ForceField& FF, double* Blocksum, Components& SystemComponents, size_t SelectedComponent, double2 oldScale, double2 newScale, int MoveType);
 
