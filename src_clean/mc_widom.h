@@ -1,27 +1,24 @@
 #include <algorithm>
 #include <omp.h>
-//#include <cuda_fp16.h>
-//#include <thrust/device_ptr.h>
-//#include <thrust/reduce.h>
-static inline size_t SelectTrialPosition(Components& SystemComponents, std::vector<double>& LogBoltzmannFactors) //In Zhao's code, LogBoltzmannFactors = Rosen
+#include <cuda_fp16.h>
+#include <thrust/device_ptr.h>
+#include <thrust/reduce.h>
+static inline size_t SelectTrialPosition(std::vector<double>& LogBoltzmannFactors) //In Zhao's code, LogBoltzmannFactors = Rosen
 {
-    std::vector<double>& ShiftedBoltzmannFactors = SystemComponents.ShiftedBoltzmannFactors;
-    ShiftedBoltzmannFactors.clear();
+    std::vector<double> ShiftedBoltzmannFactors(LogBoltzmannFactors.size());
+
     // Energies are always bounded from below [-U_max, infinity>
     // Find the lowest energy value, i.e. the largest value of (-Beta U)
-    double largest_value = SystemComponents.MaxRosen;//*std::max_element(LogBoltzmannFactors.begin(), LogBoltzmannFactors.end());
+    double largest_value = *std::max_element(LogBoltzmannFactors.begin(), LogBoltzmannFactors.end());
 
-    double inv_largest_value = 1.0 / exp(largest_value);
     // Standard trick: shift the Boltzmann factors down to avoid numerical problems
     // The largest value of 'ShiftedBoltzmannFactors' will be 1 (which corresponds to the lowest energy).
     double SumShiftedBoltzmannFactors = 0.0;
     for (size_t i = 0; i < LogBoltzmannFactors.size(); ++i)
     {
-        //ShiftedBoltzmannFactors.emplace_back(exp(LogBoltzmannFactors[i] - largest_value));
-        ShiftedBoltzmannFactors.emplace_back(SystemComponents.ExpRosen[i] * inv_largest_value);
-        //SumShiftedBoltzmannFactors += ShiftedBoltzmannFactors[i];
+        ShiftedBoltzmannFactors[i] = exp(LogBoltzmannFactors[i] - largest_value);
+        SumShiftedBoltzmannFactors += ShiftedBoltzmannFactors[i];
     }
-    SumShiftedBoltzmannFactors = SystemComponents.SumRosen * inv_largest_value;
 
     // select the Boltzmann factor
     size_t selected = 0;
@@ -39,52 +36,42 @@ inline void Host_sum_Widom_HGGG_SEPARATE(Components& SystemComponents, size_t Nu
   std::vector<size_t>& Trialindex        = SystemComponents.Trialindex;
   std::vector<double>& Rosen             = SystemComponents.Rosen;
   std::vector<MoveEnergy>& TrialEnergies = SystemComponents.TrialEnergies;
-  SystemComponents.SumRosen = 0.0;
-  
-  for(size_t trial = 0; trial < NumberWidomTrials; trial++)
+  for(size_t i = 0; i < NumberWidomTrials; i++)
   {
-    if(flag[trial]) continue;
-    Trialindex.emplace_back(trial);
+    if(!flag[i])
+    {
+      Trialindex.emplace_back(i);
+    }
+    //else printf("THERE IS OVERLAP FOR TRIAL %zu, flag = %s\n", i, flag[i] ? "true" : "false");
+  }
+
+  size_t Trialsize = Trialindex.size();
+  for(size_t i = 0; i < Trialsize; i++)
+  {
+    size_t trial = Trialindex[i];
     cudaMemcpy(SystemComponents.host_array, &energy_array[trial*HGGG_Nblock * 2], 2 * HGGG_Nblock*sizeof(T), cudaMemcpyDeviceToHost);
     T HG_vdw = 0.0; T HG_real = 0.0;
     T GG_vdw = 0.0; T GG_real = 0.0;
     //Zhao's note: If during the pairwise interaction, there is no overlap, then don't check overlap in the summation//
     //Otherwise, it will cause issues when using the fractional molecule (energy drift in retrace)//
     //So translation/rotation summation of energy are not checking the overlaps, so this is the reason for the discrepancy//
-    for(size_t ijk=0; ijk < HG_Nblock; ijk++)
-    {
-      HG_vdw+=SystemComponents.host_array[ijk];
-      HG_real+=SystemComponents.host_array[ijk + HGGG_Nblock];
-    }
-    for(size_t ijk=HG_Nblock; ijk < HGGG_Nblock; ijk++)
-    { 
-      GG_vdw+=SystemComponents.host_array[ijk];
-      GG_real+=SystemComponents.host_array[ijk + HGGG_Nblock];
-    }
+    for(size_t ijk=0; ijk < HG_Nblock; ijk++)           HG_vdw+=SystemComponents.host_array[ijk];
+    for(size_t ijk=HG_Nblock; ijk < HGGG_Nblock; ijk++) GG_vdw+=SystemComponents.host_array[ijk];
+    
+    for(size_t ijk=HGGG_Nblock; ijk < HG_Nblock + HGGG_Nblock; ijk++) HG_real+=SystemComponents.host_array[ijk];
+    for(size_t ijk=HG_Nblock + HGGG_Nblock; ijk < HGGG_Nblock + HGGG_Nblock; ijk++) GG_real+=SystemComponents.host_array[ijk];
      
-    MoveEnergy E;
-    E.HGVDW = HG_vdw;
-    E.HGReal= HG_real;
-    E.GGVDW = GG_vdw;
-    E.GGReal= GG_real;
+    MoveEnergy E; 
+    E.HGVDW = static_cast<double>(HG_vdw);
+    E.HGReal= static_cast<double>(HG_real);
+    E.GGVDW = static_cast<double>(GG_vdw);
+    E.GGReal= static_cast<double>(GG_real);
 
     double tot = E.HGVDW + E.GGVDW;
     if(VDWRealBiasing) tot += E.HGReal + E.GGReal;
 
     TrialEnergies.emplace_back(E);
-    double BetaE = SystemComponents.Beta*tot;
-
-    if(Rosen.size() == 0) SystemComponents.MaxRosen = -BetaE;
-    else 
-      if((-BetaE) > SystemComponents.MaxRosen)
-        SystemComponents.MaxRosen = -BetaE;      
-
-    double Exp_Minus_BetaE = exp(-BetaE);
-
-    Rosen.emplace_back(-BetaE);
-    SystemComponents.ExpRosen.emplace_back(Exp_Minus_BetaE);
-    SystemComponents.SumRosen += Exp_Minus_BetaE;
-
+    Rosen.emplace_back(-SystemComponents.Beta*tot);
     //printf("trial: %zu, HG: %.5f, GG: %.5f, tot: %.5f\n", i, HG_vdw + HG_real, GG_vdw + GG_real, tot);
   }
 }
@@ -288,10 +275,9 @@ static inline double Widom_Move_FirstBead_PARTIAL(Variables& Vars, size_t system
     Atomsize += SystemComponents.Moleculesize[ijk] * SystemComponents.NumberOfMolecule_for_Component[ijk];
   }
   std::vector<double>&Rosen        = SystemComponents.Rosen;
-  std::vector<double>&ExpRosen     = SystemComponents.ExpRosen;
   std::vector<MoveEnergy>&energies = SystemComponents.TrialEnergies;
   std::vector<size_t>&Trialindex   = SystemComponents.Trialindex;
-  ExpRosen.clear(); Rosen.clear(); energies.clear(); Trialindex.clear(); SystemComponents.MaxRosen = 0.0;
+  Rosen.clear(); energies.clear(); Trialindex.clear();
 
   //Three variables to settle: NumberOfTrials, start_position, SelectedMolID
   //start_position: where to copy data from
@@ -366,8 +352,9 @@ static inline double Widom_Move_FirstBead_PARTIAL(Variables& Vars, size_t system
     case CBMC_INSERTION: case REINSERTION_INSERTION:
     {
       if(Rosen.size() == 0) break;
-      SelectedTrial = SelectTrialPosition(SystemComponents, Rosen);
-      Rosenbluth = SystemComponents.SumRosen; //std::accumulate(ExpRosen.begin(), ExpRosen.end(), decltype(SystemComponents.ExpRosen)::value_type(0));
+      SelectedTrial = SelectTrialPosition(Rosen);
+      for(size_t a = 0; a < Rosen.size(); a++) Rosen[a] = std::exp(Rosen[a]);
+      Rosenbluth =std::accumulate(Rosen.begin(), Rosen.end(), decltype(SystemComponents.Rosen)::value_type(0));
       if(Rosenbluth < 1e-150) break;
       Goodconstruction = true;
       break;
@@ -376,7 +363,8 @@ static inline double Widom_Move_FirstBead_PARTIAL(Variables& Vars, size_t system
     {
       if(Rosen.size() == 0) break;
       SelectedTrial = 0;
-      Rosenbluth = SystemComponents.SumRosen; //std::accumulate(ExpRosen.begin(), ExpRosen.end(), decltype(SystemComponents.ExpRosen)::value_type(0));
+      for(size_t a = 0; a < Rosen.size(); a++) Rosen[a] = std::exp(Rosen[a]);
+      Rosenbluth =std::accumulate(Rosen.begin(), Rosen.end(), decltype(SystemComponents.Rosen)::value_type(0));
       if(Rosenbluth < 1e-150) break;
       Goodconstruction = true;
       break;
@@ -384,7 +372,8 @@ static inline double Widom_Move_FirstBead_PARTIAL(Variables& Vars, size_t system
     case CBMC_DELETION: case REINSERTION_RETRACE: case IDENTITY_SWAP_OLD:
     {
       SelectedTrial = 0;
-      Rosenbluth = SystemComponents.SumRosen; //std::accumulate(ExpRosen.begin(), ExpRosen.end(), decltype(SystemComponents.ExpRosen)::value_type(0));
+      for(size_t a = 0; a < Rosen.size(); a++) Rosen[a] = std::exp(Rosen[a]);
+      Rosenbluth =std::accumulate(Rosen.begin(), Rosen.end(), decltype(SystemComponents.Rosen)::value_type(0));
       Goodconstruction = true;
       break;
     }
@@ -393,7 +382,7 @@ static inline double Widom_Move_FirstBead_PARTIAL(Variables& Vars, size_t system
   if(!Goodconstruction) return 0.0;
   REALselected = Trialindex[SelectedTrial];
 
-  if(MoveType == REINSERTION_INSERTION) StoredR = Rosenbluth - ExpRosen[SelectedTrial];
+  if(MoveType == REINSERTION_INSERTION) StoredR = Rosenbluth - Rosen[SelectedTrial];
   if(MoveType == REINSERTION_RETRACE) Rosenbluth += StoredR;
   //For 1st bead for identity swap, there is only 1 bead used for insertion/retrace, don't divide.//
   averagedRosen = Rosenbluth;
@@ -434,11 +423,10 @@ static inline double Widom_Move_Chain_PARTIAL(Variables& Vars, size_t systemId, 
     Atomsize += SystemComponents.Moleculesize[ijk] * SystemComponents.NumberOfMolecule_for_Component[ijk];
   }
 
-  std::vector<double>&Rosen        = SystemComponents.Rosen;
-  std::vector<double>&ExpRosen     = SystemComponents.ExpRosen;
-  std::vector<MoveEnergy>&energies = SystemComponents.TrialEnergies;
-  std::vector<size_t>&Trialindex   = SystemComponents.Trialindex;
-  ExpRosen.clear(); Rosen.clear(); energies.clear(); Trialindex.clear(); SystemComponents.MaxRosen = 0.0;
+  std::vector<double>& Rosen        = SystemComponents.Rosen;
+  std::vector<MoveEnergy>& energies = SystemComponents.TrialEnergies;
+  std::vector<size_t>& Trialindex   = SystemComponents.Trialindex;
+  Rosen.clear(); energies.clear(); Trialindex.clear();
 
   //Two variables to settle: start_position, SelectedMolID
   //start_position: where to copy data from
@@ -507,9 +495,10 @@ static inline double Widom_Move_Chain_PARTIAL(Variables& Vars, size_t systemId, 
     case CBMC_INSERTION: case REINSERTION_INSERTION: case IDENTITY_SWAP_NEW:
     {
       if(Rosen.size() == 0) break;
-      SelectedTrial = SelectTrialPosition(SystemComponents, Rosen); 
+      SelectedTrial = SelectTrialPosition(Rosen); 
 
-      Rosenbluth = SystemComponents.SumRosen; //std::accumulate(ExpRosen.begin(), ExpRosen.end(), decltype(SystemComponents.ExpRosen)::value_type(0));
+      for(size_t a = 0; a < Rosen.size(); a++) Rosen[a] = std::exp(Rosen[a]);
+      Rosenbluth =std::accumulate(Rosen.begin(), Rosen.end(), decltype(SystemComponents.Rosen)::value_type(0));
       if(Rosenbluth < 1e-150) break;
       Goodconstruction = true;
       break;
@@ -517,7 +506,8 @@ static inline double Widom_Move_Chain_PARTIAL(Variables& Vars, size_t systemId, 
     case CBMC_DELETION: case REINSERTION_RETRACE: case IDENTITY_SWAP_OLD:
     {
       SelectedTrial = 0;
-      Rosenbluth = SystemComponents.SumRosen; //std::accumulate(ExpRosen.begin(), ExpRosen.end(), decltype(SystemComponents.ExpRosen)::value_type(0));
+      for(size_t a = 0; a < Rosen.size(); a++) Rosen[a] = std::exp(Rosen[a]);
+      Rosenbluth =std::accumulate(Rosen.begin(), Rosen.end(), decltype(SystemComponents.Rosen)::value_type(0));
       Goodconstruction = true;
       break;
     }

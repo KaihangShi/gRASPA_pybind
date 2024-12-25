@@ -248,11 +248,12 @@ inline void SingleBody_Acceptance(Variables& Vars, size_t systemId, MoveEnergy& 
   //if(MoveType == SINGLE_INSERTION) printf("SINGLE INSERTION, tot: %.5f, preFactor: %.5f, Pacc: %.5f\n", tot.total(), preFactor, Pacc);
   //if(MoveType == SINGLE_DELETION)  printf("SINGLE DELETION,  tot: %.5f, preFactor: %.5f, Pacc: %.5f\n", tot.total(), preFactor, Pacc);
   //
-  //no overlap//
-  if(!SystemComponents.flag[0])
+  //no overlap, or don't check overlap (for special moves)//
+  if(!SystemComponents.flag[0] || !Vars.TempVal.CheckOverlap)
   {
     double Random = Get_Uniform_Random();
     if(Random < preFactor * std::exp(-SystemComponents.Beta * tot.total())) Accept = true;
+    //printf("Random: %.5f, Accept: %s\n", Accept ? "True" : "False");
   }
   switch(MoveType)
   {
@@ -304,6 +305,7 @@ inline MoveEnergy SingleBodyMove(Variables& Vars, size_t systemId)
 {
   SingleBody_Prepare(Vars, systemId);
   MoveEnergy tot = SingleBody_Calculation(Vars, systemId);
+  //tot.print();
   SingleBody_Acceptance(Vars, systemId, tot);
   return tot;
 }

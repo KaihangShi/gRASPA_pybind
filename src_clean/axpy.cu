@@ -50,16 +50,18 @@ inline void Copy_AtomData_from_Device(Atoms* System, Atoms* d_a, Components& Sys
   HostBox.Cubic = Sims.Box.Cubic;
 }
 
-inline void GenerateRestartMovies(Components& SystemComponents, Simulations& Sims, PseudoAtomDefinitions& PseudoAtom, size_t systemIdx, int SimulationMode)
+inline void GenerateRestartMovies(Variables& Vars, size_t systemId, PseudoAtomDefinitions& PseudoAtom, int SimulationMode)
 {
+  Components& SystemComponents = Vars.SystemComponents[systemId];
+  Simulations& Sims = Vars.Sims[systemId];
+  Boxsize& HostBox = Vars.Box[systemId];
   //Generate Restart file during the simulation, regardless of the phase
   Atoms device_System[SystemComponents.NComponents.x];
-  Boxsize HostBox;
   Copy_AtomData_from_Device(device_System, Sims.d_a, SystemComponents, HostBox, Sims);
-  create_Restart_file(0, SystemComponents.HostSystem, SystemComponents, SystemComponents.FF, HostBox, PseudoAtom.Name, systemIdx);
-  Write_All_Adsorbate_data(0, SystemComponents.HostSystem, SystemComponents, SystemComponents.FF, HostBox, PseudoAtom.Name, systemIdx);
+  create_Restart_file(0, SystemComponents.HostSystem, SystemComponents, SystemComponents.FF, HostBox, PseudoAtom.Name, systemId);
+  Write_All_Adsorbate_data(0, SystemComponents.HostSystem, SystemComponents, SystemComponents.FF, HostBox, PseudoAtom.Name, systemId);
   //Only generate LAMMPS data movie for production phase
-  if(SimulationMode == PRODUCTION)  create_movie_file(SystemComponents.HostSystem, SystemComponents, HostBox, PseudoAtom.Name, systemIdx);
+  if(SimulationMode == PRODUCTION)  create_movie_file(SystemComponents.HostSystem, SystemComponents, HostBox, PseudoAtom.Name, systemId);
 }
 
 ///////////////////////////////////////////////////////////
@@ -421,7 +423,7 @@ void GatherStatisticsDuringSimulation(Variables& Vars, size_t systemId, size_t c
         SystemComponents.Tmmc[comp].AdjustTMBias();
   }
   if(i % SystemComponents.MoviesEvery == 0)//Generate restart file and movies 
-    GenerateRestartMovies(SystemComponents, Sims, SystemComponents.PseudoAtoms, 0, SimulationMode);
+    GenerateRestartMovies(Vars, systemId, SystemComponents.PseudoAtoms, SimulationMode);
 }
 
 void InitialMCBeforeMoves(Variables& Vars, size_t systemId)
