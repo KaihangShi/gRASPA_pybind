@@ -247,6 +247,7 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle)
   }
   else if(RANDOMNUMBER < SystemComponents.Moves[comp].VolumeMoveProb)
   {
+    //printf(" VOLUME MOVE\n");
     double start = omp_get_wtime();
     ForceField& FF = Vars.device_FF;
     VolumeMove(SystemComponents, Sims, FF);
@@ -257,13 +258,13 @@ inline void RunMoves(Variables& Vars, size_t box_index, int Cycle)
   else if(RANDOMNUMBER < SystemComponents.Moves[comp].GibbsSwapProb)
   {
     //if(Vars.GibbsStatistics.DoGibbs)
-    //printf("Gibbs SWAP\n");
+    //printf(" Gibbs SWAP\n");
     if(Vars.SystemComponents.size() == 2)
       GibbsParticleTransfer(Vars, comp, Vars.GibbsStatistics);
   }
   else if(RANDOMNUMBER < SystemComponents.Moves[comp].GibbsVolumeMoveProb)
   {
-    //printf("Gibbs VOLUME\n");
+    //printf(" Gibbs VOLUME\n");
     if(Vars.SystemComponents.size() == 2)
       NVTGibbsMove(Vars.SystemComponents, Vars.Sims, FF, Vars.GibbsStatistics);
   }
@@ -569,9 +570,10 @@ void Run_Simulation_MultipleBoxes(Variables& Vars)
   {
     for(size_t sim = 0; sim < NumberOfSimulations; sim++)
     {
-      size_t selectedSim = static_cast<size_t>(Get_Uniform_Random() * static_cast<double>(NumberOfSimulations));
-      size_t Steps = Determine_Number_Of_Steps(Vars, sim, i);
-
+      double RNM = Get_Uniform_Random();
+      size_t selectedSim = static_cast<size_t>(RNM * static_cast<double>(NumberOfSimulations));
+      size_t Steps = Determine_Number_Of_Steps(Vars, selectedSim, i);
+      //printf("STEPS: %zu, RNM: %.5f, selectedSim: %zu\n", Steps, RNM, selectedSim);
       for(size_t j = 0; j < Steps; j++)
       {
         RunMoves(Vars, selectedSim, i);
