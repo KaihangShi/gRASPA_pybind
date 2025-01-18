@@ -107,8 +107,8 @@ g.finalize(W)
     Component: 1, SelfAtomE: 0.00000 (0.00000 kJ/mol)
     Component: 0, Intra-Molecular ExclusionE: 115033008.45111 (138352992.80625 kJ/mol)
     Component: 1, Intra-Molecular ExclusionE: 0.00000 (0.00000 kJ/mol)
-    HostEwald took 0.20128 sec
-    Ewald Summation (total energy) on the CPU took 0.20128 secs
+    HostEwald took 0.20396 sec
+    Ewald Summation (total energy) on the CPU took 0.20396 secs
     Component 0, Intra Exclusion Energy: -115033008.45111 (-138352992.80625 kJ/mol)
     Component 0, Atom Self Exclusion Energy: 100586536.82400 (120977870.55210 kJ/mol)
     DEBUG: comp: 0, IntraE: -115033008.45111, SelfE: 100586536.82400
@@ -171,8 +171,8 @@ g.finalize(W)
     Component: 1, SelfAtomE: 0.00000 (0.00000 kJ/mol)
     Component: 0, Intra-Molecular ExclusionE: 115033008.45111 (138352992.80625 kJ/mol)
     Component: 1, Intra-Molecular ExclusionE: 0.00000 (0.00000 kJ/mol)
-    HostEwald took 0.19898 sec
-    Ewald Summation (total energy) on the CPU took 0.19898 secs
+    HostEwald took 0.20020 sec
+    Ewald Summation (total energy) on the CPU took 0.20020 secs
      ****** CHECKING StructureFactors (SF) Stored on CPU vs. GPU ****** 
     CPU SF: 4140, GPU SF: 4140
     StructureFactor 0, CPU: 0.00000 0.00000, GPU: 0.00000 0.00000
@@ -244,7 +244,7 @@ g.finalize(W)
     ===============================
     == PRODUCTION PHASE ENDS ==
     ===============================
-    Work took 0.155617 seconds
+    Work took 0.156148 seconds
     ======================================
     CHECKING FINAL ENERGY FOR SYSTEM [0]
     ======================================
@@ -263,8 +263,8 @@ g.finalize(W)
     Component: 1, SelfAtomE: 237887.81780 (286113.45550 kJ/mol)
     Component: 0, Intra-Molecular ExclusionE: 115033008.45111 (138352992.80625 kJ/mol)
     Component: 1, Intra-Molecular ExclusionE: 237126.16311 (285197.39492 kJ/mol)
-    HostEwald took 0.20247 sec
-    Ewald Summation (total energy) on the CPU took 0.20247 secs
+    HostEwald took 0.20168 sec
+    Ewald Summation (total energy) on the CPU took 0.20168 secs
      ****** CHECKING StructureFactors (SF) Stored on CPU vs. GPU ****** 
     CPU SF: 4140, GPU SF: 4140
     StructureFactor 0, CPU: 0.00000 0.00000, GPU: 0.00000 0.00000
@@ -288,8 +288,8 @@ g.finalize(W)
     Framework Structure Factor 7, real: -0.00000 imag: -0.00000
     Framework Structure Factor 8, real: 0.00000 imag: 0.00000
     Framework Structure Factor 9, real: 0.00000 imag: -0.00000
-    VDW + Real on the GPU took 0.00044 secs
-    Ewald Summation (total energy) on the GPU took 0.00153 secs
+    VDW + Real on the GPU took 0.00052 secs
+    Ewald Summation (total energy) on the GPU took 0.00149 secs
     Total GPU Energy: 
     ====================== DONE CALCULATING FINAL STAGE ENERGY ======================
     ======================================
@@ -513,9 +513,8 @@ g.finalize(W)
 # Running gRASPA, with your modifications
 ====================
 ## To add your modifications, the user needs to modify the gRASPA processes
-    * To change what happens during an MC move, one needs to decompose `g.RUN()` function and add their modifications there.
-    * Users are given control of these intermediate variables, such as acceptance ratio, selected component/molecule, which move to perform
-    
+  * To change what happens during an MC move, one needs to decompose `g.RUN()` function and add their modifications there.
+  * Users are given control of these intermediate variables, such as acceptance ratio, selected component/molecule, which move to perform
 
 
 ```python
@@ -562,10 +561,12 @@ W.SystemComponents[box_index].MCMoveVariables.MoveType
 
 
 ## Prepare the MC move
-Then to run the new move, first we do the preparation of the mc move
-This includes: book-keeping the amount of MC move performed, initialize trial positions for the insertion move, etc.
-:note: We can see from the random number offset on the GPU that the preparation of the insertion move costs 3 x double3 of random numbers
-    * This corresponds to the random positions in x, y, and z directions
+* Then to run the new move, first we do the preparation of the mc move
+* This includes: 
+  * book-keeping the amount of MC move performed
+  * initialize trial positions for the insertion move, etc.
+* :memo: We can see from the random number offset on the GPU that the preparation of the insertion move costs 3 x double3 of random numbers
+  * This corresponds to the random positions in x, y, and z directions
 
 
 ```python
@@ -612,16 +613,43 @@ W.SystemComponents[box_index].MCMoveVariables.Pacc
 
 
 # Move Acceptance #
-Dictates whether a move is accepted by Metropolis scheme
-You can then check acceptance by looking at the temporary variables
+* Dictates whether a move is accepted by Metropolis scheme
+* You can then check acceptance by looking at the temporary variables
 
 
 ```python
 # Move Acceptance #
+comp = W.SystemComponents[box_index].MCMoveVariables.component
+print(f"number of molecules: {W.SystemComponents[box_index].NumberOfMolecules[comp]}")
 g.SingleBody_Acceptance(W, box_index, DeltaE)
 print(f"Accept?: {W.SystemComponents[box_index].MCMoveVariables.Accept}\n")
+print(f"number of molecules: {W.SystemComponents[box_index].NumberOfMolecules[comp]}")
 ```
 
+    number of molecules: 18
     Accept?: False
     
+    number of molecules: 18
 
+
+## That move was rejected and number of molecules stays the same 
+* We can see Pacc is small
+* DeltaE has a really high HGVDW value, indicating unfavorable host-guest interactions
+## What if we force the move to be accepted?
+* We can modify this by changing the Pacc to something big
+
+
+```python
+# The move is rejected, what if we can change that manually? #
+W.SystemComponents[box_index].MCMoveVariables.Pacc = 0.95
+g.SingleBody_Acceptance(W, box_index, DeltaE)
+print(f"Accept?: {W.SystemComponents[box_index].MCMoveVariables.Accept}\n")
+print(f"number of molecules: {W.SystemComponents[box_index].NumberOfMolecules[comp]}")
+```
+
+    Accept?: True
+    
+    number of molecules: 19
+
+
+## Now the move is forced to be accepted!
