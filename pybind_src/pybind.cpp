@@ -1,43 +1,19 @@
 //PYBIND11
+#include "axpy.h"
+#include "read_data.h"
+#include "main.h"
+#include <omp.h>
+#include <iostream>
+
 #include <pybind11/pybind11.h>
 #include <pybind11/numpy.h>
 #include <pybind11/stl.h>
 #include <typeinfo>
 
 namespace py = pybind11;
-
-/*
-//PYBIND11 STUFF//
-template<typename T>
-py::list Convert_Pointer_To_PyList(size_t size, T* point)
-{
-  py::list temp;
-  for(size_t i = 0; i < size; i++) temp.append(point[i]);
-  return temp;
-}
-*/
-/////////////////////////////////
-//SOME FUNCTIONS USED BY PYBIND//
-/////////////////////////////////
-double* get_epsilon_pointer(ForceField& FF)
-{
-  return FF.epsilon;
-};
-double* get_sigma_pointer(ForceField& FF)
-{
-  return FF.sigma;
-};
-
-double get_val_ptr(double* ptr, size_t location)
-{
-  return ptr[location];
-}
-
-
 ////////////////////
 //POINTER WRAPPERS//
 ////////////////////
-
 
 template <class T> class ptr_wrapper
 {
@@ -69,13 +45,6 @@ template <typename T>
 void change_val_ptr(ptr_wrapper<T>& ptr, size_t location, T newval)
 {
   ptr[location] = newval;
-}
-
-ptr_wrapper<double> get_ptr_double(Variables& Vars, std::string INPUT)
-{ 
-  if(INPUT == "FF.epsilon")    {return Vars.FF.epsilon;}
-  else if(INPUT == "FF.sigma") {return Vars.FF.sigma;}
-  else if(INPUT == "FF.shift") {return Vars.FF.shift;}
 }
 
 template <typename T>
@@ -197,7 +166,7 @@ py::dict GetTrialConfig(Variables& Vars, size_t systemId, size_t component, bool
   {
     CopyAtomDataFromGPU(Vars, systemId, component); //Copy the atom info for this component from GPU to CPU//
     Atoms& HostSystem = Vars.SystemComponents[systemId].HostSystem[component];
-    UpdateAtomInfoHost(HostSystem, HostTrial, size, Vars.TempVal.MoveType);
+    UpdateAtomInfoHost(HostSystem, HostTrial, size, Vars.SystemComponents[systemId].TempVal.MoveType);
     
     AtomDict["pos"]    = ptr_to_pyarray(HostSystem.pos, HostSystem.size);
     AtomDict["charge"] = ptr_to_pyarray(HostSystem.charge, HostSystem.size);
@@ -229,47 +198,6 @@ py::dict GetBox(Variables& Vars, size_t systemId)
   return Dict;
 }
 
-ptr_wrapper<int> get_ptr_int(Variables& Vars, std::string INPUT)
-{ 
-  if(INPUT == "FF.FFType"){return Vars.FF.FFType;}
-}
-
-template<typename T>
-void print_ptr(ptr_wrapper<T> ptr)
-{
-  int  element = 1;
-  bool regular = true;
-  
-  //if(std::is_same<T, int2>::value) element = 2;
-  //if(std::is_same<T, int3>::value) element = 3;
-  //if(std::is_same<T, double2>::value) element = 2;
-  //if(std::is_same<T, double3>::value) element = 3;
-  //if(std::is_same<T, Complex>::value)
-  //{
-  //  regular = false;
-  //}
-  for (int i = 0; i < 3; ++i)
-  {
-    if(regular)  //double.int.double2.double3//
-    {
-      if(element == 1) std::cout << ptr[i] << " ";
-    }
-    else
-    {
-      //if(std::is_same<T, Complex>::value) std::cout << " " << ptr[i].real << " " << ptr[i].imag << " ";
-      //if(element == 2) std::cout << " " << ptr[i].x << " " << ptr[i].y << " ";
-      //if(element == 3) std::cout << " " << ptr[i].x << " " << ptr[i].y << " " << ptr[i].z << " ";
-    }
-  }
-  std::cout << "\n";
-}
-
-template <typename T>
-T square(T x)
-{
-  return x * x;
-}
-
 //MoveEnergy add/substract//
 void MoveEnergy_Add(MoveEnergy& A, MoveEnergy& B)
 {
@@ -297,22 +225,6 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("imag", &Complex::imag);
 
   m.def("ptr_to_pyarray", &ptr_to_pyarray<double>, "ptr", "size");
-
-  m.def("get_ptr_int",    &get_ptr_int,    "Vars", "INPUT");
-  m.def("get_ptr_double", &get_ptr_double, "Vars", "INPUT");
-  //m.def("wrap_get_ptr", &wrap_get_ptr<int>, "Vars", "INPUT");
-  m.def("square", square<double>);
-  m.def("square", square<int>);
-
-  m.def("print_ptr", &print_ptr<int>);
-  m.def("print_ptr", &print_ptr<double>);
-  //m.def("print_ptr", &print_ptr<double3>);
-  m.def("get_val_ptr", &get_val_ptr, "ptr", "location");
-  m.def("change_val_ptr", &change_val_ptr<double>, "ptr", "location", "newvalue");
-  m.def("change_val_ptr", &change_val_ptr<int>, "ptr", "location", "newvalue");
-  m.def("change_val_ptr", &change_val_ptr<size_t>, "ptr", "location", "newvalue");
-  m.def("change_val_ptr", &change_val_ptr<double2>, "ptr", "location", "newvalue");
-  m.def("change_val_ptr", &change_val_ptr<double3>, "ptr", "location", "newvalue");
 
   py::class_<RandomNumber>(m, "RandomNumber")
     .def(py::init<>())
@@ -364,8 +276,6 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("CutOffVDW", &ForceField::CutOffVDW)
     .def_readwrite("CutOffCoul", &ForceField::CutOffCoul)
     .def_readonly("epsilon", &ForceField::epsilon);
-  m.def("get_epsilon_pointer", &get_epsilon_pointer, py::return_value_policy::reference, "FF");
-  m.def("get_sigma_pointer",   &get_sigma_pointer,   py::return_value_policy::reference, "FF");
 
   py::class_<Boxsize>(m, "Boxsize")
     .def(py::init<>())
@@ -407,28 +317,60 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("OverlapCriteria", &Input_Container::OverlapCriteria)
     .def_readwrite("noCharges", &Input_Container::noCharges);
 
-  
+  ///////////////////
+  // CBMC Variable //
+  ///////////////////
+  py::class_<CBMC_Variables>(m, "CBMC_Variables")
+    .def(py::init<>())
+    .def_readwrite("CBMC_Type",     &CBMC_Variables::MoveType)
+    .def_readwrite("Rosenbluth",    &CBMC_Variables::Rosenbluth)
+    .def_readwrite("StoredR",       &CBMC_Variables::StoredR)
+    .def_readwrite("selectedTrial", &CBMC_Variables::selectedTrial)
+    .def_readwrite("selectedTrialOrientation", &CBMC_Variables::selectedTrialOrientation)
+    .def_readwrite("start_position",      &CBMC_Variables::start_position)
+    .def_readwrite("SuccessConstruction", &CBMC_Variables::SuccessConstruction)
+    .def_readwrite("FirstBeadEnergy",     &CBMC_Variables::FirstBeadEnergy)
+    .def_readwrite("ChainEnergy",         &CBMC_Variables::ChainEnergy)
+    .def("clear", &CBMC_Variables::clear, "clear variables at the start of a CBMC move");
+
+ 
   py::class_<MoveTempStorage>(m, "MoveTempStorage")
     .def(py::init<>())
-    .def_readwrite("RandomNumber", &MoveTempStorage::RandomNumber)
-    .def_readwrite("systemId",     &MoveTempStorage::systemId)
-    .def_readwrite("component",    &MoveTempStorage::component)
-    .def_readwrite("MoveType",     &MoveTempStorage::MoveType)
-    .def_readwrite("Accept",       &MoveTempStorage::Accept)
-    .def_readwrite("molecule",     &MoveTempStorage::molecule);
+    //.def_readwrite("RandomNumber", &MoveTempStorage::RandomNumber)
+    //.def_readwrite("systemId",     &MoveTempStorage::systemId)
+    .def_readwrite("component",      &MoveTempStorage::component)
+    .def_readwrite("MoveType",       &MoveTempStorage::MoveType)
+    .def_readwrite("molecule",       &MoveTempStorage::molecule)
+    .def_readwrite("Accept",         &MoveTempStorage::Accept)
+    .def_readwrite("Pacc",           &MoveTempStorage::Pacc)
+    .def_readwrite("Overlap",        &MoveTempStorage::Overlap)
+    .def_readwrite("CheckOverlap",   &MoveTempStorage::CheckOverlap)
+    .def_readwrite("Do_New",         &MoveTempStorage::Do_New)
+    .def_readwrite("Do_Old",         &MoveTempStorage::Do_Old)
+    .def_readwrite("start_position", &MoveTempStorage::start_position)
+    .def_readwrite("previous_step",  &MoveTempStorage::previous_step)
+    .def_readwrite("preFactor",      &MoveTempStorage::preFactor)    //GCMC swap move prefactors
+    .def_readwrite("UpdateLocation", &MoveTempStorage::UpdateLocation) //position of atoms need to be deleted in deletion move//
+    .def_readwrite("Scale",          &MoveTempStorage::Scale);
 
   py::class_<Move_Statistics>(m, "Move_Statistics")
     .def(py::init<>())
     .def_readwrite("TranslationProb", &Move_Statistics::TranslationProb)
     .def_readwrite("RotationProb",    &Move_Statistics::RotationProb)
     .def_readwrite("SwapProb",        &Move_Statistics::SwapProb)
-    .def_readwrite("ReinsertionProb", &Move_Statistics::ReinsertionProb);
+    .def_readwrite("ReinsertionProb", &Move_Statistics::ReinsertionProb)
+    .def("Record_Move_Total",  &Move_Statistics::Record_Move_Total,  py::arg("MoveType"))
+    .def("Record_Move_Accept", &Move_Statistics::Record_Move_Accept, py::arg("MoveType"));
 
   py::class_<Components>(m, "Components")
     .def(py::init<>())
     .def_readwrite("Moves", &Components::Moves)
     .def_readwrite("deltaE", &Components::deltaE)
-    .def_readwrite("NumberOfMolecules", &Components::NumberOfMolecule_for_Component);
+    .def_readwrite("NumberOfMolecules", &Components::NumberOfMolecule_for_Component)
+    .def_readwrite("CBMC_Variables_New", &Components::CBMC_New)
+    .def_readwrite("CBMC_Variables_Old", &Components::CBMC_Old)
+    .def_readwrite("MCMoveVariables", &Components::TempVal)
+    .def("ApplyTMMCBias_UpdateCMatrix", &Components::ApplyTMMCBias_UpdateCMatrix, py::arg("Pacc"), py::arg("MoveType"));
     /*
     .def_readwrite("", &Components::Moves);
     .def_readwrite("Moves", &Components::Moves);
@@ -457,7 +399,9 @@ PYBIND11_MODULE(gRASPA, m)
     .def_readwrite("SimulationMode",  &Variables::SimulationMode)
     .def_readwrite("SystemComponents",  &Variables::SystemComponents)
     .def_readwrite("PseudoAtoms",  &Variables::PseudoAtoms)
-    .def_readwrite("MCMoveVariables", &Variables::TempVal);
+    .def_readwrite("RandomNumber",  &Variables::RandomNumber)
+    .def_readwrite("CurrentsystemId",  &Variables::systemId);
+
 
 
   m.def("get_arr", &get_arr<double>, "Variable", "NAME");
@@ -477,7 +421,16 @@ PYBIND11_MODULE(gRASPA, m)
     .value("TRANSLATION", MoveTypes::TRANSLATION)
     .value("ROTATION", MoveTypes::ROTATION)
     .value("SINGLE_INSERTION", MoveTypes::SINGLE_INSERTION)
-    .value("SINGLE_DELETION", MoveTypes::SINGLE_DELETION);
+    .value("SINGLE_DELETION", MoveTypes::SINGLE_DELETION)
+    .value("SPECIAL_ROTATION", MoveTypes::SPECIAL_ROTATION)
+    .value("INSERTION", MoveTypes::INSERTION)
+    .value("DELETION", MoveTypes::DELETION)
+    .value("REINSERTION", MoveTypes::REINSERTION)
+    .value("CBCF_LAMBDACHANGE", MoveTypes::CBCF_LAMBDACHANGE)
+    .value("CBCF_INSERTION", MoveTypes::CBCF_INSERTION)
+    .value("CBCF_DELETION", MoveTypes::CBCF_DELETION)
+    .value("IDENTITY_SWAP", MoveTypes::IDENTITY_SWAP)
+    .value("WIDOM", MoveTypes::WIDOM);
 
   //////////////////////
   // HELPER FUNCTIONS //
@@ -515,12 +468,95 @@ PYBIND11_MODULE(gRASPA, m)
   ///////////////
   // RUN MOVES //
   ///////////////
+  m.def("RunMoves", &RunMoves, py::arg("Variables"), py::arg("systemId"), py::arg("Cycle"));
   m.def("Run_Simulation_ForOneBox", &Run_Simulation_ForOneBox, "run simulation for selected box", "Vars", "box_index", "SimulationMode");
   //SINGLE-BODY MOVE//
   m.def("SingleBody_Prepare", &SingleBody_Prepare, py::arg("Variables"), py::arg("systemId"));
   m.def("SingleBody_Calculation", &SingleBody_Calculation, py::arg("Vars"), py::arg("systemId"));
   m.def("SingleBody_Acceptance", &SingleBody_Acceptance, py::arg("Vars"), py::arg("Box_Index"), py::arg("delta_energy"));
+  m.def("SingleBodyMove", &SingleBodyMove, py::arg("Vars"), py::arg("Box_Index"));
 
   m.def("ForceField_Processing", &ForceField_Processing, py::arg("Input"));
   m.def("Copy_InputLoader_Data", &Copy_InputLoader_Data, py::arg("Vars"));
+
+  py::class_<SingleMove>(m, "SingleMove")
+    .def(py::init<>())
+    .def("Prepare",    &SingleMove::Prepare)
+    .def("Calculate",  &SingleMove::Calculate)
+    .def("Acceptance", &SingleMove::Acceptance)
+    .def_readwrite("energy", &SingleMove::energy);
+
+  //////////////
+  // MC MOVES //
+  //////////////
+  
+  //INSERTION (CBMC)//
+  py::class_<InsertionMove>(m, "InsertionMove")
+    .def(py::init<>())
+    .def_readwrite("energy",     &InsertionMove::energy)
+    .def_readwrite("preFactor",  &InsertionMove::preFactor)
+    .def_readwrite("Pacc",       &InsertionMove::Pacc)
+    .def_readwrite("Accept",     &InsertionMove::Accept)
+    .def_readwrite("InsertionVariables",   &InsertionMove::InsertionVariables)
+    .def("Initialize", &InsertionMove::Initialize)
+    .def("Calculate",  &InsertionMove::Calculate, py::arg("Vars"), py::arg("systemId"))
+    .def("Acceptance", &InsertionMove::Acceptance, py::arg("Vars"), py::arg("systemId"))
+    .def("Run",        &InsertionMove::Run, py::arg("Vars"), py::arg("systemId")); //RUN CBMC INSERTION MOVE//
+    //.def("WidomMove",  &InsertionMove::WidomMove, py::arg("Vars"), py::arg("systemId")) //Widom Insertion//
+    //.def("CreateMolecule", &InsertionMove::CreateMolecule, py::arg("Vars"), py::arg("systemId")); //Create molecule at the beginning of the program//
+  
+  
+  //DELETION (CBMC)//
+  py::class_<DeletionMove>(m, "DeletionMove")
+    .def(py::init<>())
+    .def_readwrite("energy",     &DeletionMove::energy)
+    .def_readwrite("preFactor",  &DeletionMove::preFactor)
+    .def_readwrite("Pacc",       &DeletionMove::Pacc)
+    .def_readwrite("Accept",     &DeletionMove::Accept)
+    .def_readwrite("DeletionVariables",   &DeletionMove::DeletionVariables)
+    .def("Initialize", &DeletionMove::Initialize)
+    .def("Calculate",  &DeletionMove::Calculate, py::arg("Vars"), py::arg("systemId"))
+    .def("Acceptance", &DeletionMove::Acceptance, py::arg("Vars"), py::arg("systemId"))
+    .def("Run",        &DeletionMove::Run, py::arg("Vars"), py::arg("systemId"));
+  
+  //REINSERTION//
+  py::class_<ReinsertionMove>(m, "ReinsertionMove")
+    .def(py::init<>())
+    .def_readwrite("energy",     &ReinsertionMove::energy)
+    .def_readwrite("old_energy", &ReinsertionMove::old_energy)
+    .def_readwrite("preFactor",  &ReinsertionMove::preFactor)
+    .def_readwrite("Pacc",       &ReinsertionMove::Pacc)
+    .def_readwrite("Accept",     &ReinsertionMove::Accept)
+    .def_readwrite("InsertionVariables",  &ReinsertionMove::InsertionVariables)
+    .def_readwrite("DeletionVariables",   &ReinsertionMove::DeletionVariables)
+    .def("Initialize",                 &ReinsertionMove::Initialize)
+    .def("Calculate_Insertion",        &ReinsertionMove::Calculate_Insertion, py::arg("Vars"), py::arg("systemId"))
+    .def("Calculate_Deletion",         &ReinsertionMove::Calculate_Deletion, py::arg("Vars"), py::arg("systemId"))
+    .def("Calculate_AdjustRosenbluth", &ReinsertionMove::Calculate_AdjustRosenbluth, py::arg("Vars"), py::arg("systemId"))
+    .def("Acceptance",                 &ReinsertionMove::Acceptance, py::arg("Vars"), py::arg("systemId"))
+    .def("Run",                        &ReinsertionMove::Run, py::arg("Vars"), py::arg("systemId"));
+  
+  //GIBBS PARTICLE TRANSFER//
+  py::class_<Gibbs>(m, "GibbsStatistics")
+    .def(py::init<>());
+    
+  py::class_<GibbsParticleXferMove>(m, "GibbsParticleXferMove")
+    .def(py::init<>())
+    .def_readwrite("SelectedBox", &GibbsParticleXferMove::SelectedBox)
+    .def_readwrite("OtherBox",    &GibbsParticleXferMove::OtherBox)
+    .def_readwrite("energy",     &GibbsParticleXferMove::energy)
+    .def_readwrite("old_energy", &GibbsParticleXferMove::old_energy)
+    .def_readwrite("Insertion_preFactor", &GibbsParticleXferMove::Insertion_preFactor)
+    .def_readwrite("Deletion_preFactor",  &GibbsParticleXferMove::Deletion_preFactor)
+    .def_readwrite("Pacc", &GibbsParticleXferMove::Pacc)
+    .def_readwrite("Accept", &GibbsParticleXferMove::Accept)
+    .def_readwrite("InsertionVariables", &GibbsParticleXferMove::InsertionVariables)
+    .def_readwrite("DeletionVariables",  &GibbsParticleXferMove::DeletionVariables)
+    .def("Initialize",                   &GibbsParticleXferMove::Initialize)
+    .def("Prepare_SelectBoxMolecule",    &GibbsParticleXferMove::Prepare_SelectBoxMolecule, py::arg("Vars"), py::arg("systemId"))
+    .def("Calculate_Insertion",          &GibbsParticleXferMove::Calculate_Insertion, py::arg("Vars"), py::arg("systemId"))
+    .def("Calculate_Deletion",           &GibbsParticleXferMove::Calculate_Deletion, py::arg("Vars"), py::arg("systemId"))
+    .def("Acceptance",                   &GibbsParticleXferMove::Acceptance, py::arg("Vars"), py::arg("systemId"))
+    .def("Run",                          &GibbsParticleXferMove::Run, py::arg("Vars"), py::arg("systemId"), py::arg("GibbsStatistics"));
+   
 }
