@@ -1,7 +1,15 @@
-the examples are all in the jupyter notebook folder
+# gRASPA pybind: pybind patch for gRASPA
+* enjoy gRASPA and GPU backend while on python and Jupyter Notebook!
 
-the src_clean folder is NOT updated yet.
+## Advantages
+* **Access**:  Get access to gRASPA's internal variables
+* **Control**: See what happens during an MC move
+* **Create**:  Create your own MC moves with python code and packaged MC move parts
 
-src_clean will be deleted from this folder. 
-
-The code will be using src_clean from gRASPA, with only one-two files working as a patch for using gRASPA-pybind.
+## How to use
+1. download gRASPA_pybind and [snurrlab/gRASPA](https://github.com/snurr-group/gRASPA) (or [Zhaoli2042/gRASPA_fork](https://github.com/Zhaoli2042/gRASPA_fork))
+2. copy the files in gRASPA's [src_clean](https://github.com/snurr-group/gRASPA/tree/main/src_clean) to gRASPA_pybind's [pybind_src](https://github.com/Zhaoli2042/gRASPA_pybind/tree/main/pybind_src)
+3. Compile using `./BIND_NVC_COMPILE`
+  * If successful, you can see a **shared library file (gRASPA.so)** being generated
+4. Copy `gRASPA.so` file to the `JUPYTER_NOTEBOOKS` folder
+5. Run `jupyter notebook` and open one of the example notebooks!
