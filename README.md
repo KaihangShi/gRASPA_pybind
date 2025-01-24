@@ -7,7 +7,9 @@
 * **Create**:  Create your own MC moves with python code and packaged MC move parts
 
 ## How to use
-1. download gRASPA_pybind and [Zhaoli2042/gRASPA_fork](https://github.com/Zhaoli2042/gRASPA_fork)
+0. Install pybind11 via `pip install pybind11`
+    * check [pybind installation](https://pybind11.readthedocs.io/en/stable/installing.html) for more information!
+2. download gRASPA_pybind and [Zhaoli2042/gRASPA_fork](https://github.com/Zhaoli2042/gRASPA_fork)
     * support for [snurrlab/gRASPA](https://github.com/snurr-group/gRASPA) will be available soon!
 3. copy the files in gRASPA's [src_clean](https://github.com/snurr-group/gRASPA/tree/main/src_clean) to gRASPA_pybind's [pybind_src](https://github.com/Zhaoli2042/gRASPA_pybind/tree/main/pybind_src)
 4. Compile using `./BIND_NVC_COMPILE`
