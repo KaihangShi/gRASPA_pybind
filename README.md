@@ -16,3 +16,5 @@
     * If successful, you can see a **shared library file (gRASPA.so)** being generated
 4. Copy `gRASPA.so` file to the `JUPYTER_NOTEBOOKS` folder
 5. Run `jupyter notebook` and open one of the example notebooks!
+    * :memo: NOTE: you need to install jupyter notebook to run these examples!
+    * check [jupyter notebook installation](https://jupyter.org/install#jupyter-notebook)
