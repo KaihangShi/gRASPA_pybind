@@ -1,4 +1,4 @@
-# gRASPA pybind: pybind patch for gRASPA (test)
+# gRASPA pybind: pybind extension for gRASPA (test)
 * enjoy gRASPA and GPU backend while on python and Jupyter Notebook!
 
 ## Advantages
