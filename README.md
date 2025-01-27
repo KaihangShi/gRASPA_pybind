@@ -9,7 +9,7 @@
 ## How to use
 0. Install pybind11 via `pip install pybind11`
     * check [pybind installation](https://pybind11.readthedocs.io/en/stable/installing.html) for more information!
-1. download gRASPA_pybind and [Zhaoli2042/gRASPA_fork](https://github.com/Zhaoli2042/gRASPA_fork) or [](https://github.com/snurr-group/gRASPA)
+1. download gRASPA_pybind and [Zhaoli2042/gRASPA_fork](https://github.com/Zhaoli2042/gRASPA_fork) or [snurr-group/gRASPA](https://github.com/snurr-group/gRASPA)
 2. copy the files in gRASPA's [src_clean](https://github.com/snurr-group/gRASPA/tree/main/src_clean) to gRASPA_pybind's [pybind_src](https://github.com/Zhaoli2042/gRASPA_pybind/tree/main/pybind_src)
 3. Compile using `./BIND_NVC_COMPILE`
     * If successful, you can see a **shared library file (gRASPA.so)** being generated
