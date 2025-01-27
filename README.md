@@ -1,5 +1,5 @@
 # gRASPA pybind: pybind extension for gRASPA (test)
-* enjoy gRASPA and GPU backend while on python and Jupyter Notebook!
+* enjoy (?) gRASPA and GPU backend while on python and Jupyter Notebook!
 
 ## Advantages
 * **Access**:  Get access to gRASPA's internal variables
